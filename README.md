@@ -107,10 +107,8 @@ O projeto adota **separação clara entre Backend e Frontend**, com repositório
 ### Fase 1 – Fundação Arquitetural
 - [ ] Configuração do ambiente Docker (backend + frontend separados)
 - [ ] Estrutura base do Backend (Laravel API)
-- [ ] Estrutura base do Frontend (Vue 3 SPA)
 - [ ] Configuração de CI/CD
 - [ ] Padrão de camadas implementado
-- [ ] Comunicação API REST entre frontend e backend
 
 ### Fase 2 – Multi-tenant Institucional
 - [ ] Modelo de dados para unidades administrativas
@@ -119,6 +117,8 @@ O projeto adota **separação clara entre Backend e Frontend**, com repositório
 - [ ] Testes de isolamento
 
 ### Fase 3 – Fichas Dinâmicas Versionadas
+- [ ] Estrutura base do Frontend (Vue 3 SPA)
+- [ ] Comunicação API REST entre frontend e backend
 - [ ] Engine de renderização de formulários
 - [ ] Sistema de versionamento
 - [ ] Validação dinâmica
