@@ -138,41 +138,57 @@ O projeto adota **separação clara entre Backend e Frontend**, com repositório
 - Docker Compose >= 2.0
 - Git
 
+> 🪟 **Usuários Windows**: Se encontrar erro "execução de scripts foi desabilitada", veja o guia [WINDOWS_SETUP.md](WINDOWS_SETUP.md)
+
 ### Instalação
+
+#### 🪟 Windows (PowerShell)
+
+```powershell
+# Clone o repositório
+git clone https://github.com/seu-usuario/form-engine.git
+cd form-engine
+
+# Permitir execução de scripts (apenas uma vez)
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+
+# Verificar ambiente
+.\scripts\dev.ps1 check
+
+# Configuração automática completa
+.\scripts\dev.ps1 init
+
+# URLs de acesso
+# Backend API: http://localhost:8000
+# PostgreSQL: localhost:5432
+# Redis: localhost:6379
+```
+
+#### 🐧 Linux/Mac (Bash)
 
 ```bash
 # Clone o repositório
 git clone https://github.com/seu-usuario/form-engine.git
 cd form-engine
 
-# Suba os containers (backend + frontend + banco de dados)
-docker-compose up -d
+# Criar projeto Laravel
+docker run --rm -v $(pwd)/backend:/app composer create-project laravel/laravel:^11.0 .
 
-# ==== BACKEND ====
-# Acesse o container do backend
+# Configurar ambiente
 cd backend
 cp .env.example .env
+cd ..
 
-# Instale dependências do Laravel
+# Subir containers
+docker-compose up -d
+
+# Instalar dependências e configurar
 docker-compose exec backend composer install
-
-# Execute as migrations
+docker-compose exec backend php artisan key:generate
 docker-compose exec backend php artisan migrate
 
-# Gere a chave da aplicação
-docker-compose exec backend php artisan key:generate
-
-# ==== FRONTEND ====
-# Acesse o container do frontend
-cd ../frontend
-cp .env.example .env
-
-# Instale dependências do Vue
-docker-compose exec frontend npm install
-
-# ==== ACESSO ====
-# Backend API: http://localhost:8000/api
-# Frontend SPA: http://localhost:3000
+# URLs de acesso
+# Backend API: http://localhost:8000
 # PostgreSQL: localhost:5432
 # Redis: localhost:6379
 ```
@@ -180,6 +196,21 @@ docker-compose exec frontend npm install
 ## 🧪 Testes
 
 ### Backend (Laravel)
+
+#### Windows (PowerShell)
+
+```powershell
+# Executar todos os testes
+.\scripts\dev.ps1 test
+
+# Executar testes com cobertura
+.\scripts\dev.ps1 test-coverage
+
+# Executar testes específicos
+.\scripts\dev.ps1 test-filter FormTest
+```
+
+#### Linux/Mac (Bash)
 
 ```bash
 # Executar todos os testes
@@ -191,17 +222,6 @@ docker-compose exec backend php artisan test --coverage
 # Executar testes específicos
 docker-compose exec backend php artisan test --filter=FormTest
 ```
-
-### Frontend (Vue)
-
-```bash
-# Executar testes unitários
-docker-compose exec frontend npm run test:unit
-
-# Executar testes e2e
-docker-compose exec frontend npm run test:e2e
-
-# Executar testes em modo watch
 docker-compose exec frontend npm run test:watch
 ```
 
@@ -209,7 +229,7 @@ docker-compose exec frontend npm run test:watch
 
 ```
 form-engine/
-├── backend/                 # 🔴 API Laravel (Backend)
+├── 📁 backend/              # API Laravel
 │   ├── app/
 │   │   ├── Http/
 │   │   │   ├── Controllers/ # Controllers da API
@@ -228,29 +248,39 @@ form-engine/
 │   │   ├── Feature/         # Testes de integração
 │   │   └── Unit/            # Testes unitários
 │   ├── .env.example
-│   ├── composer.json
-│   └── Dockerfile
+│   └── composer.json
 │
-├── frontend/                # 🔵 SPA Vue 3 (Frontend)
-│   ├── src/
-│   │   ├── components/      # Componentes Vue
-│   │   ├── views/           # Views/Pages
-│   │   ├── router/          # Vue Router
-│   │   ├── store/           # Pinia (State Management)
-│   │   ├── services/        # API Services (Axios)
-│   │   ├── composables/     # Composables Vue 3
-│   │   └── assets/          # Assets estáticos
-│   ├── public/
-│   ├── tests/
-│   │   ├── unit/            # Testes unitários
-│   │   └── e2e/             # Testes E2E
-│   ├── .env.example
-│   ├── package.json
-│   ├── vite.config.js
-│   └── Dockerfile
+├── 📁 docker/               # Configurações Docker
+│   ├── backend/             
+│   │   └── Dockerfile       # Imagem do backend
+│   └── nginx/
+│       └── default.conf     # Config Nginx
 │
-├── docker-compose.yml       # Orquestração dos containers
-└── README.md
+├── 📁 docs/                 # Documentação
+│   ├── README.md            # Índice da documentação
+│   ├── visao.md             # Visão do produto
+│   ├── arquitetura.md       # Arquitetura técnica
+│   └── modelo_de_dados.md  # Modelagem do banco
+│
+├── 📁 scripts/              # Scripts de desenvolvimento
+│   ├── README.md            # Documentação dos scripts
+│   └── dev.ps1              # Script principal (Windows)
+│
+├── 📄 .env.example          # Variáveis de ambiente
+├── 📄 .gitignore
+├── 📄 docker-compose.yml    # Orquestração
+└── 📄 README.md             # Este arquivo
+```
+
+### Organização
+
+- **`backend/`** - Código-fonte do Laravel (API REST)
+- **`docker/`** - Dockerfiles e configurações de containers
+- **`docs/`** - Documentação técnica e conceitual
+- **`scripts/`** - Scripts utilitários para desenvolvimento
+- **`docker-compose.yml`** - Definição dos serviços (backend, nginx, postgres, redis)
+
+> 📖 Para mais detalhes sobre cada diretório, veja os arquivos README.md específicos dentro de cada pasta.
 ```
 
 ## 🤝 Contribuindo
