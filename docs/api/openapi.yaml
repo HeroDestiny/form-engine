@@ -1,0 +1,1838 @@
+openapi: 3.0.3
+info:
+  title: Form Engine API
+  description: |
+    API REST para gerenciamento de formulários dinâmicos com isolamento multi-tenant,
+    versionamento de estruturas e auditoria completa.
+
+    ## Recursos Principais
+    - Multi-tenant com isolamento por unidade administrativa
+    - Formulários dinâmicos com versionamento imutável
+    - Sistema de permissões baseado em papéis (RBAC)
+    - Auditoria completa de ações
+    - Exportação de dados em CSV
+
+    ## Autenticação
+    Todas as rotas protegidas requerem token Bearer JWT via Laravel Sanctum.
+
+    **Header:**
+    ```
+    Authorization: Bearer {token}
+    ```
+
+  version: 1.0.0
+  contact:
+    name: Form Engine Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000/api
+    description: Desenvolvimento local
+  - url: https://staging.formengine.com/api
+    description: Ambiente de staging
+  - url: https://api.formengine.com/api
+    description: Produção
+
+tags:
+  - name: Autenticação
+    description: Endpoints de login e gerenciamento de sessão
+  - name: Tenants
+    description: Gerenciamento de unidades administrativas
+  - name: Usuários
+    description: Gerenciamento de usuários do tenant
+  - name: Formulários
+    description: CRUD de formulários
+  - name: Versões
+    description: Versionamento de formulários
+  - name: Campos
+    description: Gerenciamento de campos de formulário
+  - name: Submissões
+    description: Preenchimento e consulta de formulários
+  - name: Exportação
+    description: Exportação de dados
+  - name: Auditoria
+    description: Consulta de logs de auditoria
+
+paths:
+  # ==================== AUTENTICAÇÃO ====================
+  /auth/login:
+    post:
+      tags:
+        - Autenticação
+      summary: Autenticar no sistema
+      description: Realiza login e retorna token de acesso
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: joao@example.com
+                password:
+                  type: string
+                  format: password
+                  example: senha123
+      responses:
+        '200':
+          description: Login bem-sucedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/logout:
+    post:
+      tags:
+        - Autenticação
+      summary: Encerrar sessão
+      description: Invalida o token atual
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout bem-sucedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      tags:
+        - Autenticação
+      summary: Dados do usuário autenticado
+      description: Retorna informações do usuário atual
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Dados do usuário
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserWithTenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==================== TENANTS ====================
+  /admin/tenants:
+    get:
+      tags:
+        - Tenants
+      summary: Listar tenants
+      description: Lista todos os tenants (apenas admin sistema)
+      operationId: listTenants
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Lista de tenants
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          tenants:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Tenant'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Tenants
+      summary: Criar tenant
+      description: Cria nova unidade administrativa (apenas admin sistema)
+      operationId: createTenant
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - slug
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 255
+                  example: Prefeitura Municipal de Exemplo
+                slug:
+                  type: string
+                  pattern: '^[a-z0-9-]+$'
+                  example: prefeitura-exemplo
+      responses:
+        '201':
+          description: Tenant criado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /admin/tenants/{tenantId}/status:
+    patch:
+      tags:
+        - Tenants
+      summary: Ativar/desativar tenant
+      description: Altera status do tenant
+      operationId: updateTenantStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - is_active
+              properties:
+                is_active:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Status atualizado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== USUÁRIOS ====================
+  /tenants/{tenantId}/users:
+    get:
+      tags:
+        - Usuários
+      summary: Listar usuários
+      description: Lista usuários do tenant (apenas admin)
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Lista de usuários
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          users:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/User'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Usuários
+      summary: Criar usuário
+      description: Cria novo usuário no tenant (apenas admin)
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+                - role
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 255
+                  example: João Silva
+                email:
+                  type: string
+                  format: email
+                  example: joao@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: senha123
+                role:
+                  type: string
+                  enum: [admin, manager, user]
+                  example: manager
+      responses:
+        '201':
+          description: Usuário criado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /tenants/{tenantId}/users/{userId}/status:
+    patch:
+      tags:
+        - Usuários
+      summary: Ativar/desativar usuário
+      description: Altera status do usuário (apenas admin)
+      operationId: updateUserStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - is_active
+              properties:
+                is_active:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Status atualizado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== FORMULÁRIOS ====================
+  /forms:
+    get:
+      tags:
+        - Formulários
+      summary: Listar formulários disponíveis
+      description: Lista formulários ativos do tenant
+      operationId: listForms
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Termo de busca
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, created_at]
+            default: name
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: Lista de formulários
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          forms:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/FormWithVersion'
+                          total:
+                            type: integer
+                            example: 5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - Formulários
+      summary: Criar formulário
+      description: Cria novo formulário (manager/admin)
+      operationId: createForm
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 255
+                  example: Cadastro de Beneficiários
+                description:
+                  type: string
+                  maxLength: 1000
+                  example: Formulário para registro de novos beneficiários do programa
+      responses:
+        '201':
+          description: Formulário criado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          form:
+                            $ref: '#/components/schemas/Form'
+                          version:
+                            $ref: '#/components/schemas/FormVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /forms/{formId}:
+    get:
+      tags:
+        - Formulários
+      summary: Obter formulário
+      description: Retorna detalhes do formulário
+      operationId: getForm
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Dados do formulário
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FormWithVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /forms/{formId}/status:
+    patch:
+      tags:
+        - Formulários
+      summary: Ativar/desativar formulário
+      description: Altera status do formulário (manager/admin)
+      operationId: updateFormStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - is_active
+              properties:
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Status atualizado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Form'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== VERSÕES ====================
+  /forms/{formId}/versions:
+    get:
+      tags:
+        - Versões
+      summary: Listar versões
+      description: Lista versões do formulário
+      operationId: listVersions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de versões
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          versions:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/FormVersionWithFields'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags:
+        - Versões
+      summary: Criar nova versão
+      description: Cria nova versão baseada na anterior (manager/admin)
+      operationId: createVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: Versão criada
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          version:
+                            $ref: '#/components/schemas/FormVersion'
+                          fields_copied:
+                            type: integer
+                            example: 5
+                          from_version:
+                            type: integer
+                            example: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          description: Erro de negócio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /forms/{formId}/versions/{versionId}/publish:
+    post:
+      tags:
+        - Versões
+      summary: Publicar versão
+      description: Publica versão draft (manager/admin)
+      operationId: publishVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Versão publicada
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FormVersionWithFields'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ==================== CAMPOS ====================
+  /forms/{formId}/versions/{versionId}/fields:
+    get:
+      tags:
+        - Campos
+      summary: Listar campos
+      description: Lista campos da versão
+      operationId: listFields
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de campos
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          fields:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/FormField'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags:
+        - Campos
+      summary: Adicionar campo
+      description: Adiciona campo à versão draft (manager/admin)
+      operationId: addField
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormFieldInput'
+      responses:
+        '201':
+          description: Campo adicionado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FormField'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /forms/{formId}/versions/{versionId}/fields/{fieldId}:
+    put:
+      tags:
+        - Campos
+      summary: Editar campo
+      description: Edita campo da versão draft (manager/admin)
+      operationId: updateField
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: fieldId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormFieldInput'
+      responses:
+        '200':
+          description: Campo atualizado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FormField'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags:
+        - Campos
+      summary: Remover campo
+      description: Remove campo da versão draft (manager/admin)
+      operationId: deleteField
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: fieldId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Campo removido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== SUBMISSÕES ====================
+  /forms/{formId}/submit:
+    post:
+      tags:
+        - Submissões
+      summary: Submeter formulário
+      description: Preenche e submete formulário
+      operationId: submitForm
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - values
+              properties:
+                values:
+                  type: object
+                  additionalProperties: true
+                  example:
+                    nome_completo: Maria Santos
+                    estado_civil: solteiro
+                    data_nascimento: '1990-05-15'
+                    telefone: (11) 98765-4321
+      responses:
+        '201':
+          description: Formulário submetido
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          submission:
+                            $ref: '#/components/schemas/FormSubmission'
+                          form:
+                            type: object
+                            properties:
+                              id:
+                                type: integer
+                              name:
+                                type: string
+                              version:
+                                type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          description: Formulário desativado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /forms/{formId}/drafts:
+    get:
+      tags:
+        - Submissões
+      summary: Listar rascunhos
+      description: Lista rascunhos do usuário
+      operationId: listDrafts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de rascunhos
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          drafts:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/FormSubmission'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - Submissões
+      summary: Salvar rascunho
+      description: Salva preenchimento parcial
+      operationId: saveDraft
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - values
+              properties:
+                values:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '201':
+          description: Rascunho salvo
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          draft:
+                            $ref: '#/components/schemas/FormSubmission'
+                          fields_filled:
+                            type: integer
+                          fields_total:
+                            type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /submissions:
+    get:
+      tags:
+        - Submissões
+      summary: Consultar submissões
+      description: Lista submissões do tenant (manager/admin) ou próprias (user)
+      operationId: listSubmissions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: form_id
+          in: query
+          schema:
+            type: integer
+          description: Filtrar por formulário
+        - name: version_id
+          in: query
+          schema:
+            type: integer
+          description: Filtrar por versão
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Data inicial
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Data final
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+          description: Filtrar por usuário
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [submitted, draft]
+            default: submitted
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Lista de submissões
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          submissions:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/FormSubmissionWithRelations'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /submissions/{submissionId}:
+    get:
+      tags:
+        - Submissões
+      summary: Visualizar submissão
+      description: Retorna detalhes completos da submissão
+      operationId: getSubmission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalhes da submissão
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FormSubmissionDetailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== EXPORTAÇÃO ====================
+  /submissions/export:
+    post:
+      tags:
+        - Exportação
+      summary: Exportar dados em CSV
+      description: Exporta submissões para CSV (manager/admin)
+      operationId: exportSubmissions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - form_id
+              properties:
+                form_id:
+                  type: integer
+                  example: 5
+                version_ids:
+                  type: array
+                  items:
+                    type: integer
+                  example: [1, 2]
+                date_from:
+                  type: string
+                  format: date
+                  example: '2026-03-01'
+                date_to:
+                  type: string
+                  format: date
+                  example: '2026-03-31'
+                format:
+                  type: string
+                  enum: [csv]
+                  default: csv
+      responses:
+        '200':
+          description: CSV gerado
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="cadastro-beneficiarios-20260322.csv"'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ==================== AUDITORIA ====================
+  /audit-logs:
+    get:
+      tags:
+        - Auditoria
+      summary: Consultar log de auditoria
+      description: Lista registros de auditoria (apenas admin)
+      operationId: listAuditLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: entity_type
+          in: query
+          schema:
+            type: string
+        - name: entity_id
+          in: query
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Lista de logs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          logs:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/AuditLog'
+                          pagination:
+                            $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /audit-logs/{logId}:
+    get:
+      tags:
+        - Auditoria
+      summary: Visualizar detalhes do log
+      description: Retorna detalhes completos de registro de auditoria (apenas admin)
+      operationId: getAuditLog
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: logId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalhes do log
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuditLogDetailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+# ==================== COMPONENTES ====================
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtido via endpoint /auth/login
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Número da página
+
+    PerPage:
+      name: per_page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Itens por página
+
+  schemas:
+    # ========== Respostas Base ==========
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          nullable: true
+        errors:
+          type: object
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        data:
+          nullable: true
+        message:
+          type: string
+        errors:
+          type: object
+          nullable: true
+
+    Pagination:
+      type: object
+      properties:
+        current_page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 127
+        last_page:
+          type: integer
+          example: 7
+        from:
+          type: integer
+          example: 1
+        to:
+          type: integer
+          example: 20
+
+    # ========== Autenticação ==========
+    LoginResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                user:
+                  $ref: '#/components/schemas/User'
+                tenant:
+                  $ref: '#/components/schemas/Tenant'
+                token:
+                  type: string
+                  example: 5|KGpNxYZ8rJ3vQ2wB1mC6tF9sL4hD7eR0aI5nU8oP
+                token_type:
+                  type: string
+                  example: Bearer
+                expires_in:
+                  type: integer
+                  example: 3600
+            message:
+              type: string
+              example: Login realizado com sucesso
+
+    # ========== Entidades ==========
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Prefeitura Municipal de Exemplo
+        slug:
+          type: string
+          example: prefeitura-exemplo
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 10
+        tenant_id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: João Silva
+        email:
+          type: string
+          format: email
+          example: joao@example.com
+        role:
+          type: string
+          enum: [admin, manager, user]
+          example: manager
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserWithTenant:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            tenant:
+              $ref: '#/components/schemas/Tenant'
+
+    Form:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 5
+        tenant_id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Cadastro de Beneficiários
+        description:
+          type: string
+          nullable: true
+          example: Formulário para registro de novos beneficiários do programa
+        is_active:
+          type: boolean
+          example: true
+        created_by:
+          type: integer
+          example: 10
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FormVersion:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 8
+        form_id:
+          type: integer
+          example: 5
+        version_number:
+          type: integer
+          example: 1
+        is_published:
+          type: boolean
+          example: false
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: integer
+          example: 10
+        created_at:
+          type: string
+          format: date-time
+
+    FormField:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 25
+        form_version_id:
+          type: integer
+          example: 8
+        label:
+          type: string
+          example: Nome Completo
+        name:
+          type: string
+          example: nome_completo
+        type:
+          type: string
+          enum: [text, textarea, number, email, date, select, radio, checkbox]
+          example: text
+        is_required:
+          type: boolean
+          example: true
+        options:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+              label:
+                type: string
+          example:
+            - value: solteiro
+              label: Solteiro(a)
+            - value: casado
+              label: Casado(a)
+        order:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+
+    FormFieldInput:
+      type: object
+      required:
+        - label
+        - name
+        - type
+        - is_required
+        - order
+      properties:
+        label:
+          type: string
+          minLength: 2
+          maxLength: 255
+        name:
+          type: string
+          pattern: '^[a-z0-9_]+$'
+        type:
+          type: string
+          enum: [text, textarea, number, email, date, select, radio, checkbox]
+        is_required:
+          type: boolean
+        options:
+          type: array
+          items:
+            type: object
+            required:
+              - value
+              - label
+            properties:
+              value:
+                type: string
+              label:
+                type: string
+        order:
+          type: integer
+          minimum: 1
+
+    FormWithVersion:
+      allOf:
+        - $ref: '#/components/schemas/Form'
+        - type: object
+          properties:
+            latest_version:
+              type: object
+              properties:
+                id:
+                  type: integer
+                version_number:
+                  type: integer
+                published_at:
+                  type: string
+                  format: date-time
+                fields_count:
+                  type: integer
+
+    FormVersionWithFields:
+      allOf:
+        - $ref: '#/components/schemas/FormVersion'
+        - type: object
+          properties:
+            fields:
+              type: array
+              items:
+                $ref: '#/components/schemas/FormField'
+
+    FormSubmission:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 452
+        tenant_id:
+          type: integer
+          example: 1
+        form_version_id:
+          type: integer
+          example: 8
+        status:
+          type: string
+          enum: [draft, submitted]
+          example: submitted
+        submitted_by:
+          type: integer
+          example: 25
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FormSubmissionWithRelations:
+      allOf:
+        - $ref: '#/components/schemas/FormSubmission'
+        - type: object
+          properties:
+            form:
+              type: object
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+            version:
+              type: object
+              properties:
+                id:
+                  type: integer
+                version_number:
+                  type: integer
+            user:
+              type: object
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+                email:
+                  type: string
+            fields_count:
+              type: integer
+
+    FormSubmissionDetailed:
+      type: object
+      properties:
+        submission:
+          $ref: '#/components/schemas/FormSubmission'
+        form:
+          $ref: '#/components/schemas/Form'
+        version:
+          $ref: '#/components/schemas/FormVersion'
+        user:
+          $ref: '#/components/schemas/User'
+        values:
+          type: array
+          items:
+            type: object
+            properties:
+              field_id:
+                type: integer
+              label:
+                type: string
+              name:
+                type: string
+              type:
+                type: string
+              value:
+                type: string
+              value_label:
+                type: string
+                description: Label da option (para select/radio)
+              is_required:
+                type: boolean
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1523
+        tenant_id:
+          type: integer
+          nullable: true
+          example: 1
+        user_id:
+          type: integer
+          nullable: true
+          example: 10
+        action:
+          type: string
+          example: SUBMIT_FORM
+        entity_type:
+          type: string
+          example: form_submission
+        entity_id:
+          type: integer
+          nullable: true
+          example: 452
+        metadata:
+          type: object
+          additionalProperties: true
+        ip_address:
+          type: string
+          nullable: true
+          example: 192.168.1.100
+        user_agent:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    AuditLogDetailed:
+      type: object
+      properties:
+        log:
+          $ref: '#/components/schemas/AuditLog'
+        user:
+          $ref: '#/components/schemas/User'
+          nullable: true
+        entity_exists:
+          type: boolean
+        related_actions_count:
+          type: integer
+
+  responses:
+    Unauthorized:
+      description: Não autenticado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            data: null
+            message: Não autenticado
+            errors: null
+
+    Forbidden:
+      description: Sem permissão
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            data: null
+            message: Você não tem permissão para esta ação
+            errors: null
+
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            data: null
+            message: Recurso não encontrado
+            errors: null
+
+    ValidationError:
+      description: Erro de validação
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            data: null
+            message: Erro de validação
+            errors:
+              email:
+                - O e-mail informado já está cadastrado
+              password:
+                - A senha deve ter no mínimo 8 caracteres

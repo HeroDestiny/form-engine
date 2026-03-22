@@ -1,0 +1,702 @@
+{
+  "info": {
+    "name": "Form Engine API",
+    "description": "Collection completa da API Form Engine v1.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "form-engine"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tenant_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "form_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "version_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Autenticação",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('token', jsonData.data.token);",
+                  "    pm.collectionVariables.set('tenant_id', jsonData.data.tenant.id);",
+                  "    console.log('Token saved:', jsonData.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"senha123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Dados do Usuário Atual",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02. Tenants",
+      "item": [
+        {
+          "name": "Listar Tenants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/tenants?page=1&per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "tenants"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Criar Tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Prefeitura Municipal de Exemplo\",\n  \"slug\": \"prefeitura-exemplo\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admin/tenants",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "tenants"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Ativar/Desativar Tenant",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admin/tenants/{{tenant_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "tenants", "{{tenant_id}}", "status"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03. Usuários",
+      "item": [
+        {
+          "name": "Listar Usuários",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_id}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "{{tenant_id}}", "users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Criar Usuário",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"João Silva\",\n  \"email\": \"joao@example.com\",\n  \"password\": \"senha123\",\n  \"role\": \"manager\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_id}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "{{tenant_id}}", "users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Ativar/Desativar Usuário",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_id}}/users/:userId/status",
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "{{tenant_id}}", "users", ":userId", "status"],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04. Formulários",
+      "item": [
+        {
+          "name": "Listar Formulários",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/forms?search=&sort=name&order=asc",
+              "host": ["{{base_url}}"],
+              "path": ["forms"],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "sort",
+                  "value": "name"
+                },
+                {
+                  "key": "order",
+                  "value": "asc"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Criar Formulário",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('form_id', jsonData.data.form.id);",
+                  "    pm.collectionVariables.set('version_id', jsonData.data.version.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cadastro de Beneficiários\",\n  \"description\": \"Formulário para registro de novos beneficiários do programa\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/forms",
+              "host": ["{{base_url}}"],
+              "path": ["forms"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Obter Formulário",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Ativar/Desativar Formulário",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "status"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05. Versões",
+      "item": [
+        {
+          "name": "Listar Versões",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/versions",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "versions"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Criar Nova Versão",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/versions",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "versions"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Publicar Versão",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/publish",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "publish"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06. Campos",
+      "item": [
+        {
+          "name": "Listar Campos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/fields",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "fields"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Adicionar Campo (text)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Nome Completo\",\n  \"name\": \"nome_completo\",\n  \"type\": \"text\",\n  \"is_required\": true,\n  \"order\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/fields",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "fields"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Adicionar Campo (select)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Estado Civil\",\n  \"name\": \"estado_civil\",\n  \"type\": \"select\",\n  \"is_required\": true,\n  \"options\": [\n    {\"value\": \"solteiro\", \"label\": \"Solteiro(a)\"},\n    {\"value\": \"casado\", \"label\": \"Casado(a)\"},\n    {\"value\": \"divorciado\", \"label\": \"Divorciado(a)\"},\n    {\"value\": \"viuvo\", \"label\": \"Viúvo(a)\"}\n  ],\n  \"order\": 2\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/fields",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "fields"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Editar Campo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Nome Completo do Beneficiário\",\n  \"name\": \"nome_completo\",\n  \"type\": \"text\",\n  \"is_required\": true,\n  \"order\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/fields/:fieldId",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "fields", ":fieldId"],
+              "variable": [
+                {
+                  "key": "fieldId",
+                  "value": "25"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remover Campo",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/fields/:fieldId",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "fields", ":fieldId"],
+              "variable": [
+                {
+                  "key": "fieldId",
+                  "value": "25"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "07. Submissões",
+      "item": [
+        {
+          "name": "Submeter Formulário",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"values\": {\n    \"nome_completo\": \"Maria Santos\",\n    \"estado_civil\": \"solteiro\",\n    \"data_nascimento\": \"1990-05-15\",\n    \"telefone\": \"(11) 98765-4321\",\n    \"observacoes\": \"Primeira solicitação\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/submit",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "submit"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Salvar Rascunho",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"values\": {\n    \"nome_completo\": \"Maria Santos\",\n    \"telefone\": \"(11) 98765-4321\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/drafts",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "drafts"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar Rascunhos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/drafts",
+              "host": ["{{base_url}}"],
+              "path": ["forms", "{{form_id}}", "drafts"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Consultar Submissões",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/submissions?form_id={{form_id}}&status=submitted&page=1&per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["submissions"],
+              "query": [
+                {
+                  "key": "form_id",
+                  "value": "{{form_id}}"
+                },
+                {
+                  "key": "status",
+                  "value": "submitted"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Visualizar Submissão",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/submissions/:submissionId",
+              "host": ["{{base_url}}"],
+              "path": ["submissions", ":submissionId"],
+              "variable": [
+                {
+                  "key": "submissionId",
+                  "value": "452"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "08. Exportação",
+      "item": [
+        {
+          "name": "Exportar CSV",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"form_id\": {{form_id}},\n  \"version_ids\": [1],\n  \"date_from\": \"2026-03-01\",\n  \"date_to\": \"2026-03-31\",\n  \"format\": \"csv\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/submissions/export",
+              "host": ["{{base_url}}"],
+              "path": ["submissions", "export"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "09. Auditoria",
+      "item": [
+        {
+          "name": "Consultar Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/audit-logs?page=1&per_page=50",
+              "host": ["{{base_url}}"],
+              "path": ["audit-logs"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Visualizar Detalhes do Log",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/audit-logs/:logId",
+              "host": ["{{base_url}}"],
+              "path": ["audit-logs", ":logId"],
+              "variable": [
+                {
+                  "key": "logId",
+                  "value": "1523"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
