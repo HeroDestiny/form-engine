@@ -104,7 +104,12 @@ O projeto adota **separação clara entre Backend e Frontend**, com repositório
 
 ## 🗺️ Roadmap
 
-### Fase 1 – Fundação Arquitetural
+### Fase 1 – Fundação Arquitetural ✅ **DOCUMENTAÇÃO COMPLETA**
+- [x] ✅ Documentação de visão do produto
+- [x] ✅ Documentação de arquitetura técnica
+- [x] ✅ Modelo de dados completo
+- [x] ✅ 21 casos de uso especificados
+- [x] ✅ Especificação API REST (28 endpoints)
 - [ ] Configuração do ambiente Docker (backend + frontend separados)
 - [ ] Estrutura base do Backend (Laravel API)
 - [ ] Configuração de CI/CD
@@ -225,6 +230,59 @@ docker-compose exec backend php artisan test --filter=FormTest
 docker-compose exec frontend npm run test:watch
 ```
 
+## 📚 Documentação
+
+### Documentação Completa (11.619 linhas)
+
+O projeto possui documentação técnica abrangente:
+
+#### 📖 Documentos Principais
+- **[Visão do Produto](docs/visao.md)** - Objetivos, escopo e roadmap
+- **[Arquitetura](docs/arquitetura.md)** - Decisões técnicas e padrões
+- **[Modelo de Dados](docs/modelo_de_dados.md)** - Estrutura do banco
+
+#### 📋 Casos de Uso (21 especificados)
+- **[Documentação Completa](docs/casos-de-uso/)** - 21 casos de uso detalhados
+  - 01. Gestão de Tenants (2)
+  - 02. Gestão de Usuários (2)
+  - 03. Gestão de Formulários (7)
+  - 04. Preenchimento (3)
+  - 05. Consulta e Exportação (3)
+  - 06. Auditoria (2)
+  - 07. Autenticação (2)
+
+Cada caso inclui: fluxos, regras de negócio, validações, testes, exemplos de código e interfaces.
+
+#### 🌐 API REST (28 endpoints)
+- **[Guia da API](docs/api/README.md)** - Documentação completa
+- **[OpenAPI/Swagger](docs/api/openapi.yaml)** - Especificação formal
+- **[Quick Reference](docs/api/quick-reference.md)** - Referência rápida
+- **[Postman Collection](docs/api/postman-collection.json)** - Para testes
+
+**Recursos da API:**
+- Autenticação Bearer Token (Laravel Sanctum)
+- Padrão de resposta unificado
+- Exemplos cURL e código
+- Paginação e filtros
+- Schemas de validação
+
+### Testar a API
+
+**Via Swagger UI:**
+```bash
+docker run -p 8080:8080 -e SWAGGER_JSON=/api/openapi.yaml \
+  -v $(pwd)/docs/api:/api swaggerapi/swagger-ui
+# Acesse: http://localhost:8080
+```
+
+**Via Postman:**
+1. Importe `docs/api/postman-collection.json`
+2. Configure `base_url`: `http://localhost:8000/api`
+3. Execute "Login" para obter token
+4. Teste os endpoints
+
+---
+
 ## 📂 Estrutura do Projeto
 
 ```
@@ -260,7 +318,20 @@ form-engine/
 │   ├── README.md            # Índice da documentação
 │   ├── visao.md             # Visão do produto
 │   ├── arquitetura.md       # Arquitetura técnica
-│   └── modelo_de_dados.md  # Modelagem do banco
+│   ├── modelo_de_dados.md  # Modelagem do banco
+│   ├── casos-de-uso/        # 21 casos de uso detalhados
+│   │   ├── 01-gestao-tenants/
+│   │   ├── 02-gestao-usuarios/
+│   │   ├── 03-gestao-formularios/
+│   │   ├── 04-preenchimento/
+│   │   ├── 05-consulta-exportacao/
+│   │   ├── 06-auditoria/
+│   │   └── 07-autenticacao/
+│   └── api/                 # Especificação da API REST
+│       ├── openapi.yaml     # OpenAPI 3.0 (28 endpoints)
+│       ├── README.md        # Guia completo da API
+│       ├── quick-reference.md
+│       └── postman-collection.json
 │
 ├── 📁 scripts/              # Scripts de desenvolvimento
 │   ├── README.md            # Documentação dos scripts
@@ -276,12 +347,13 @@ form-engine/
 
 - **`backend/`** - Código-fonte do Laravel (API REST)
 - **`docker/`** - Dockerfiles e configurações de containers
-- **`docs/`** - Documentação técnica e conceitual
+- **`docs/`** - Documentação técnica e conceitual completa
+  - **`casos-de-uso/`** - 21 casos de uso detalhados (6.834 linhas)
+  - **`api/`** - Especificação OpenAPI 3.0 (28 endpoints)
 - **`scripts/`** - Scripts utilitários para desenvolvimento
 - **`docker-compose.yml`** - Definição dos serviços (backend, nginx, postgres, redis)
 
 > 📖 Para mais detalhes sobre cada diretório, veja os arquivos README.md específicos dentro de cada pasta.
-```
 
 ## 🤝 Contribuindo
 
