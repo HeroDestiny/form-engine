@@ -81,6 +81,11 @@ paths:
                   type: string
                   format: password
                   example: senha123
+                tenant_slug:
+                  type: string
+                  description: Obrigatório quando o mesmo e-mail existir em múltiplos tenants
+                  pattern: '^[a-z0-9-]+$'
+                  example: prefeitura-exemplo
       responses:
         '200':
           description: Login bem-sucedido
@@ -134,7 +139,12 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: '#/components/schemas/UserWithTenant'
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+                          tenant:
+                            $ref: '#/components/schemas/Tenant'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -524,6 +534,65 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
 
+  /tenants/{tenantId}/forms:
+    post:
+      tags:
+        - Formulários
+      summary: Criar formulário por tenant
+      description: Cria novo formulário no tenant informado (manager/admin com acesso ao tenant)
+      operationId: createFormForTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 255
+                  example: Cadastro de Beneficiários
+                description:
+                  type: string
+                  maxLength: 1000
+                  example: Formulário para registro de novos beneficiários do programa
+      responses:
+        '201':
+          description: Formulário criado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          form:
+                            $ref: '#/components/schemas/Form'
+                          version:
+                            $ref: '#/components/schemas/FormVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
   /forms/{formId}:
     get:
       tags:
@@ -550,7 +619,10 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: '#/components/schemas/FormWithVersion'
+                        type: object
+                        properties:
+                          form:
+                            $ref: '#/components/schemas/FormWithVersion'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -1148,8 +1220,6 @@ paths:
                         $ref: '#/components/schemas/FormSubmissionDetailed'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
