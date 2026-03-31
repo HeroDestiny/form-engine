@@ -45,13 +45,13 @@ Cada caso de uso inclui:
 Documentação completa da API REST v1.0:
 
 - **[README](api/README.md)** - Guia completo com exemplos
-- **[OpenAPI/Swagger](api/openapi.yaml)** - Especificação formal (28 endpoints)
+- **[OpenAPI/Swagger](api/openapi.yaml)** - Especificação formal (29 endpoints)
 - **[Quick Reference](api/quick-reference.md)** - Referência rápida
 - **[Postman Collection](api/postman-collection.json)** - Collection para importar
 
 **Recursos:**
 - Autenticação Bearer Token
-- 28 endpoints REST
+- 29 endpoints REST
 - Padrão de resposta unificado
 - Exemplos cURL e código
 - Paginação e filtros
@@ -116,7 +116,7 @@ docker run -p 8080:8080 -e SWAGGER_JSON=/api/openapi.yaml \
 ## 📊 Estatísticas
 
 - **Casos de Uso:** 21 documentados (6.834 linhas)
-- **Endpoints API:** 28 endpoints REST
+- **Endpoints API:** 29 endpoints REST
 - **Schemas:** 15+ modelos de dados
 - **Exemplos:** 50+ exemplos de código
 
@@ -145,5 +145,5 @@ Ao atualizar a documentação:
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Versão do Projeto:** 1.0 (Fase 1 - Fundação)

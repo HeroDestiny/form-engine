@@ -371,6 +371,6 @@ public function getActionDescription(AuditLog $log): string
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Média (Segurança e conformidade)

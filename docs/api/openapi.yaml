@@ -13,7 +13,7 @@ info:
     - Exportação de dados em CSV
 
     ## Autenticação
-    Todas as rotas protegidas requerem token Bearer JWT via Laravel Sanctum.
+    Todas as rotas protegidas requerem token Bearer emitido pelo Laravel Sanctum.
 
     **Header:**
     ```
@@ -1385,8 +1385,8 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
-      description: Token JWT obtido via endpoint /auth/login
+      bearerFormat: Sanctum Token
+      description: Token pessoal do Laravel Sanctum obtido via endpoint /auth/login
 
   parameters:
     Page:

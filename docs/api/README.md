@@ -123,7 +123,7 @@ curl -X POST https://api.formengine.com/api/auth/logout \
 | [Exportação](#exportação) | 1 | Manager+ |
 | [Auditoria](#auditoria) | 2 | Admin |
 
-**Total:** 28 endpoints
+**Total:** 29 endpoints
 
 ---
 
@@ -812,5 +812,5 @@ Versões futuras serão expostas via URL:
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Versão da API:** 1.0.0

@@ -306,6 +306,6 @@ VALUES (1, 10, 'ADD_FIELD', 'form_field', 25, '{"form_version_id": 8, "field_nam
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Engine core)

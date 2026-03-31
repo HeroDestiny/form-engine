@@ -205,6 +205,6 @@ VALUES (NULL, 1, 'CREATE_TENANT', 'tenant', 1, NOW());
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Fundação do sistema)

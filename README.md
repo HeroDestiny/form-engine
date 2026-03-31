@@ -104,14 +104,14 @@ O projeto adota **separação clara entre Backend e Frontend**, com repositório
 
 ## 🗺️ Roadmap
 
-### Fase 1 – Fundação Arquitetural ✅ **DOCUMENTAÇÃO COMPLETA**
+### Fase 1 – Fundação Arquitetural ✅ **DOCUMENTAÇÃO + BASE DO BACKEND**
 - [x] ✅ Documentação de visão do produto
 - [x] ✅ Documentação de arquitetura técnica
 - [x] ✅ Modelo de dados completo
 - [x] ✅ 21 casos de uso especificados
-- [x] ✅ Especificação API REST (28 endpoints)
+- [x] ✅ Especificação API REST (29 endpoints)
 - [ ] Configuração do ambiente Docker (backend + frontend separados)
-- [ ] Estrutura base do Backend (Laravel API)
+- [x] ✅ Estrutura base do Backend (Laravel API)
 - [ ] Configuração de CI/CD
 - [ ] Padrão de camadas implementado
 
@@ -253,7 +253,7 @@ O projeto possui documentação técnica abrangente:
 
 Cada caso inclui: fluxos, regras de negócio, validações, testes, exemplos de código e interfaces.
 
-#### 🌐 API REST (28 endpoints)
+#### 🌐 API REST (29 endpoints)
 - **[Guia da API](docs/api/README.md)** - Documentação completa
 - **[OpenAPI/Swagger](docs/api/openapi.yaml)** - Especificação formal
 - **[Quick Reference](docs/api/quick-reference.md)** - Referência rápida
@@ -328,7 +328,7 @@ form-engine/
 │   │   ├── 06-auditoria/
 │   │   └── 07-autenticacao/
 │   └── api/                 # Especificação da API REST
-│       ├── openapi.yaml     # OpenAPI 3.0 (28 endpoints)
+│       ├── openapi.yaml     # OpenAPI 3.0 (29 endpoints)
 │       ├── README.md        # Guia completo da API
 │       ├── quick-reference.md
 │       └── postman-collection.json
@@ -349,7 +349,7 @@ form-engine/
 - **`docker/`** - Dockerfiles e configurações de containers
 - **`docs/`** - Documentação técnica e conceitual completa
   - **`casos-de-uso/`** - 21 casos de uso detalhados (6.834 linhas)
-  - **`api/`** - Especificação OpenAPI 3.0 (28 endpoints)
+       - **`api/`** - Especificação OpenAPI 3.0 (29 endpoints)
 - **`scripts/`** - Scripts utilitários para desenvolvimento
 - **`docker-compose.yml`** - Definição dos serviços (backend, nginx, postgres, redis)
 

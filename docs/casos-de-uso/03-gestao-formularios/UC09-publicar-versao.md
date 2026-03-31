@@ -335,6 +335,6 @@ A imutabilidade é garantida pela validação nas operações de edição/remoç
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Funcionalidade core)
