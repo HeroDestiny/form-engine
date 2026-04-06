@@ -42,7 +42,7 @@ Cada caso de uso inclui:
 ## 🌐 Especificação da API
 
 ### [API REST Documentation](api/)
-Documentação completa da API REST v1.0:
+Documentação completa da API REST v1.0, alinhada ao backend Laravel 13:
 
 - **[README](api/README.md)** - Guia completo com exemplos
 - **[OpenAPI/Swagger](api/openapi.yaml)** - Especificação formal (29 endpoints)
@@ -50,7 +50,7 @@ Documentação completa da API REST v1.0:
 - **[Postman Collection](api/postman-collection.json)** - Collection para importar
 
 **Recursos:**
-- Autenticação Bearer Token
+- Autenticação Bearer Token via Laravel Sanctum
 - 29 endpoints REST
 - Padrão de resposta unificado
 - Exemplos cURL e código

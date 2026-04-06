@@ -157,4 +157,4 @@ O projeto será considerado bem-sucedido quando:
 
 ## 12. Estado Atual
 
-🚧 Fase 1 — Fundação arquitetural (Backend API)
+✅ Fase 1 — Fundação arquitetural consolidada no backend; frontend SPA ainda não iniciado

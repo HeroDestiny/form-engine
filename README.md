@@ -1,8 +1,8 @@
 # 📌 Form Engine
 
-![Status](https://img.shields.io/badge/status-em%20planejamento-yellow)
-![Laravel](https://img.shields.io/badge/laravel-%5E10.0-red)
-![Vue](https://img.shields.io/badge/vue-3.x-brightgreen)
+![Status](https://img.shields.io/badge/status-fase%201-blue)
+![Laravel](https://img.shields.io/badge/laravel-%5E13.0-red)
+![Frontend](https://img.shields.io/badge/frontend-nao%20iniciado-lightgrey)
 ![Docker](https://img.shields.io/badge/docker-enabled-blue)
 
 ## 📖 Visão Geral
@@ -26,8 +26,8 @@ O projeto demonstra uma arquitetura moderna, organizada em camadas, orientada a 
 
 | Componente | Tecnologia |
 |------------|------------|
-| **Backend** | Laravel (API REST) |
-| **Frontend** | Vue 3 (SPA) |
+| **Backend** | Laravel 13 (API REST) |
+| **Frontend** | Não implementado ainda |
 | **Banco de Dados** | PostgreSQL |
 | **Cache** | Redis |
 | **Containerização** | Docker + Docker Compose |
@@ -113,7 +113,7 @@ O projeto adota **separação clara entre Backend e Frontend**, com repositório
 - [ ] Configuração do ambiente Docker (backend + frontend separados)
 - [x] ✅ Estrutura base do Backend (Laravel API)
 - [ ] Configuração de CI/CD
-- [ ] Padrão de camadas implementado
+- [x] ✅ Padrão de camadas implementado
 
 ### Fase 2 – Multi-tenant Institucional
 - [ ] Modelo de dados para unidades administrativas
@@ -122,7 +122,7 @@ O projeto adota **separação clara entre Backend e Frontend**, com repositório
 - [ ] Testes de isolamento
 
 ### Fase 3 – Fichas Dinâmicas Versionadas
-- [ ] Estrutura base do Frontend (Vue 3 SPA)
+- [ ] Estrutura base do Frontend (SPA ainda não iniciada)
 - [ ] Comunicação API REST entre frontend e backend
 - [ ] Engine de renderização de formulários
 - [ ] Sistema de versionamento
