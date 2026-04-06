@@ -157,4 +157,4 @@ O projeto será considerado bem-sucedido quando:
 
 ## 12. Estado Atual
 
-✅ Fase 1 — Fundação arquitetural consolidada no backend; frontend SPA ainda não iniciado
+✅ **Fases 1 e 2 completas** — Backend com multi-tenant funcional, versionamento de formulários, auditoria e exportação CSV implementados; frontend SPA ainda não iniciado

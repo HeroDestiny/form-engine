@@ -145,5 +145,5 @@ Ao atualizar a documentação:
 
 ---
 
-**Última atualização:** 2026-03-31
-**Versão do Projeto:** 1.0 (Fase 1 - Fundação)
+**Última atualização:** 2026-04-06
+**Versão do Projeto:** 1.0 (Fases 1 e 2 - Backend Completo)
