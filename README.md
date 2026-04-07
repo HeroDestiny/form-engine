@@ -1,6 +1,6 @@
 # 📌 Form Engine
 
-![Status](https://img.shields.io/badge/status-fase%202%20completa-brightgreen)
+![Status](https://img.shields.io/badge/status-fases%201-2%20completas-brightgreen)
 ![Laravel](https://img.shields.io/badge/laravel-%5E13.0-red)
 ![Frontend](https://img.shields.io/badge/frontend-nao%20iniciado-lightgrey)
 ![Docker](https://img.shields.io/badge/docker-enabled-blue)
@@ -157,11 +157,11 @@ cd form-engine
 # Permitir execução de scripts (apenas uma vez)
 Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 
-# Verificar ambiente
-.\scripts\dev.ps1 check
+# Subir containers e backend
+\.\scripts\dev.ps1 up
 
-# Configuração automática completa
-.\scripts\dev.ps1 init
+# Executar migrations do banco
+\.\scripts\dev.ps1 migrate
 
 # URLs de acesso
 # Backend API: http://localhost:8000
@@ -176,20 +176,13 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 git clone https://github.com/seu-usuario/form-engine.git
 cd form-engine
 
-# Criar projeto Laravel
-docker run --rm -v $(pwd)/backend:/app composer create-project laravel/laravel:^11.0 .
-
-# Configurar ambiente
-cd backend
+# (Opcional) Configurar variáveis de ambiente
 cp .env.example .env
-cd ..
 
-# Subir containers
+# Subir containers (backend, nginx, postgres, redis)
 docker-compose up -d
 
-# Instalar dependências e configurar
-docker-compose exec backend composer install
-docker-compose exec backend php artisan key:generate
+# Executar migrations do banco
 docker-compose exec backend php artisan migrate
 
 # URLs de acesso
@@ -226,8 +219,6 @@ docker-compose exec backend php artisan test --coverage
 
 # Executar testes específicos
 docker-compose exec backend php artisan test --filter=FormTest
-```
-docker-compose exec frontend npm run test:watch
 ```
 
 ## 📚 Documentação

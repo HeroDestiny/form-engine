@@ -112,7 +112,7 @@ Processo automatizado que valida permissões de usuários para acessar recursos 
 - Consultar log de auditoria completo
 - Visualizar detalhes de auditoria
 
-**admin-sistema (Administrador Global)** - Futuro
+**admin-sistema (Administrador Global)**
 - Todas permissões de `admin`
 - Criar/gerenciar tenants
 - Acesso cross-tenant para suporte
@@ -121,33 +121,33 @@ Processo automatizado que valida permissões de usuários para acessar recursos 
 
 ## Matriz de Permissões
 
-| Ação | user | manager | admin |
-|------|------|---------|-------|
+| Ação | user | manager | admin | admin-sistema |
+|------|------|---------|-------|---------------|
 | **Formulários** |
-| Listar formulários disponíveis | ✅ | ✅ | ✅ |
-| Criar formulário | ❌ | ✅ | ✅ |
-| Editar formulário | ❌ | ✅ | ✅ |
-| Ativar/desativar formulário | ❌ | ✅ | ✅ |
+| Listar formulários disponíveis | ✅ | ✅ | ✅ | ✅ |
+| Criar formulário | ❌ | ✅ | ✅ | ✅ |
+| Editar formulário | ❌ | ✅ | ✅ | ✅ |
+| Ativar/desativar formulário | ❌ | ✅ | ✅ | ✅ |
 | **Versões e Campos** |
-| Adicionar campos | ❌ | ✅ | ✅ |
-| Editar campos | ❌ | ✅ | ✅ |
-| Remover campos | ❌ | ✅ | ✅ |
-| Publicar versão | ❌ | ✅ | ✅ |
-| Criar nova versão | ❌ | ✅ | ✅ |
+| Adicionar campos | ❌ | ✅ | ✅ | ✅ |
+| Editar campos | ❌ | ✅ | ✅ | ✅ |
+| Remover campos | ❌ | ✅ | ✅ | ✅ |
+| Publicar versão | ❌ | ✅ | ✅ | ✅ |
+| Criar nova versão | ❌ | ✅ | ✅ | ✅ |
 | **Submissões** |
-| Preencher formulário | ✅ | ✅ | ✅ |
-| Salvar rascunho | ✅ | ✅ | ✅ |
-| Ver próprias submissões | ✅ | ✅ | ✅ |
-| Ver todas submissões | ❌ | ✅ | ✅ |
+| Preencher formulário | ✅ | ✅ | ✅ | ✅ |
+| Salvar rascunho | ✅ | ✅ | ✅ | ✅ |
+| Ver próprias submissões | ✅ | ✅ | ✅ | ✅ |
+| Ver todas submissões | ❌ | ✅ | ✅ | ✅ |
 | **Exportação** |
-| Exportar dados | ❌ | ✅ | ✅ |
+| Exportar dados | ❌ | ✅ | ✅ | ✅ |
 | **Usuários** |
-| Criar usuário | ❌ | ❌ | ✅ |
-| Editar usuário | ❌ | ❌ | ✅ |
-| Ativar/desativar usuário | ❌ | ❌ | ✅ |
+| Criar usuário | ❌ | ❌ | ✅ | ✅ |
+| Editar usuário | ❌ | ❌ | ✅ | ✅ |
+| Ativar/desativar usuário | ❌ | ❌ | ✅ | ✅ |
 | **Auditoria** |
-| Consultar log | ❌ | ❌ | ✅ |
-| Ver detalhes de ação | ❌ | ❌ | ✅ |
+| Consultar log | ❌ | ❌ | ✅ | ✅ |
+| Ver detalhes de ação | ❌ | ❌ | ✅ | ✅ |
 
 ---
 
@@ -200,48 +200,52 @@ Authorization: Bearer {token}
 
 ## Middlewares Implementados
 
-### 1. `Authenticate` (Laravel Sanctum)
-Valida token de autenticação
+### 1. `auth:sanctum` (Laravel Sanctum)
+Valida o token de autenticação e garante que o usuário esteja autenticado.
 
-### 2. `TenantScope`
-Aplica filtro de tenant em queries
+### 2. `tenant.access` (EnsureTenantAccess)
+Garante isolamento multi-tenant verificando se o usuário autenticado pertence ao `tenantId` informado na rota. Em caso de violação, retorna resposta 404 "Recurso não encontrado".
 
-### 3. `AdminOnly`
-Requer papel `admin`
-
-### 4. `ManagerOrAdmin`
-Requer papel `manager` ou `admin`
+### 3. `role` (EnsureUserRole)
+Recebe uma ou mais roles como parâmetro (por exemplo, `role:admin`, `role:manager,admin`, `role:admin-sistema`) e bloqueia o acesso com resposta 403 "Você não tem permissão para esta ação" quando o papel do usuário não está na lista permitida.
 
 ---
 
 ## Exemplos de Aplicação
 
-### Rota que Requer Admin
+### Exemplos de Aplicação
 
 ```php
-Route::middleware(['auth:sanctum', 'admin'])->group(function () {
-    Route::post('/users', [UserController::class, 'store']);
-    Route::get('/audit-logs', [AuditLogController::class, 'index']);
+// Rotas de autenticação
+Route::prefix('auth')->group(function (): void {
+    Route::post('/login', [AuthController::class, 'login']);
+
+    Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('/me', [AuthController::class, 'me']);
+        Route::post('/logout', [AuthController::class, 'logout']);
+    });
 });
-```
 
-### Rota que Requer Manager ou Admin
+// Rotas protegidas
+Route::middleware('auth:sanctum')->group(function (): void {
+    // Administração global (admin-sistema)
+    Route::prefix('admin')->middleware('role:admin-sistema')->group(function (): void {
+        Route::get('/tenants', [AdminTenantController::class, 'index']);
+        Route::post('/tenants', [AdminTenantController::class, 'store']);
+        Route::patch('/tenants/{tenantId}/status', [AdminTenantController::class, 'updateStatus']);
+    });
 
-```php
-Route::middleware(['auth:sanctum', 'manager-or-admin'])->group(function () {
-    Route::post('/forms', [FormController::class, 'store']);
-    Route::post('/forms/{id}/publish', [FormController::class, 'publish']);
-    Route::get('/submissions', [SubmissionController::class, 'index']);
-});
-```
+    // Gestão de usuários por tenant (admin)
+    Route::get('/tenants/{tenantId}/users', [TenantUserController::class, 'index'])
+        ->middleware(['tenant.access', 'role:admin']);
 
-### Rota Acessível a Qualquer Usuário Autenticado
+    // Gestão de formulários (manager ou admin)
+    Route::post('/forms', [FormController::class, 'storeForCurrentTenant'])
+        ->middleware('role:manager,admin');
 
-```php
-Route::middleware(['auth:sanctum'])->group(function () {
-    Route::get('/forms', [FormController::class, 'index']);
-    Route::post('/forms/{id}/submit', [FormController::class, 'submit']);
-    Route::get('/submissions/mine', [SubmissionController::class, 'mine']);
+    // Auditoria (admin)
+    Route::get('/audit-logs', [AuditLogController::class, 'index'])
+        ->middleware('role:admin');
 });
 ```
 
