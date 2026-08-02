@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getForm, listFormVersions, listFields, submitForm, saveDraft } from '../api'
+import { getForm, listFormVersions, listFields, submitForm, saveDraft, listDrafts, getSubmission } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +17,11 @@ const state = reactive({
   submitting: false,
   savingDraft: false,
   message: '',
+  drafts: [],
+  draftsError: '',
+  loadingDrafts: false,
+  loadingDraftValues: false,
+  selectedDraftId: null,
 })
 
 const formValues = reactive({})
@@ -55,10 +60,85 @@ async function loadData() {
         formValues[field.name] = ''
       }
     })
+
+    await loadDrafts()
   } catch (error) {
     state.error = error?.body?.message || 'Erro ao carregar formulário para preenchimento.'
   } finally {
     state.loading = false
+  }
+}
+
+async function loadDrafts() {
+  state.loadingDrafts = true
+  state.draftsError = ''
+
+  try {
+    const data = await listDrafts(formId.value)
+    state.drafts = data?.data?.drafts ?? []
+  } catch (error) {
+    state.draftsError = error?.body?.message || 'Erro ao carregar rascunhos.'
+  } finally {
+    state.loadingDrafts = false
+  }
+}
+
+function applyDraftValues(values) {
+  Object.keys(formValues).forEach((key) => {
+    formValues[key] = ''
+  })
+  Object.keys(checkboxValues).forEach((key) => {
+    checkboxValues[key] = []
+  })
+
+  if (!values || typeof values !== 'object') return
+
+  state.fields.forEach((field) => {
+    const raw = values[field.name]
+    if (raw === undefined || raw === null || raw === '') {
+      return
+    }
+
+    if (field.type === 'checkbox') {
+      const arr = Array.isArray(raw)
+        ? raw
+        : String(raw)
+            .split(',')
+            .map((v) => v.trim())
+            .filter(Boolean)
+      checkboxValues[field.name] = arr
+    } else {
+      formValues[field.name] = raw
+    }
+  })
+}
+
+async function handleLoadDraft(draftId) {
+  if (!draftId) return
+
+  state.loadingDraftValues = true
+  state.error = ''
+  state.message = ''
+
+  try {
+    const data = await getSubmission(draftId)
+    const valuesArray = data?.data?.values ?? []
+
+    const valuesObject = {}
+    if (Array.isArray(valuesArray)) {
+      valuesArray.forEach((item) => {
+        if (item && item.name !== undefined) {
+          valuesObject[item.name] = item.value
+        }
+      })
+    }
+
+    applyDraftValues(valuesObject)
+    state.message = data?.message || 'Rascunho carregado. Você pode continuar o preenchimento.'
+  } catch (error) {
+    state.error = error?.body?.message || 'Erro ao carregar rascunho.'
+  } finally {
+    state.loadingDraftValues = false
   }
 }
 
@@ -109,6 +189,7 @@ async function handleSaveDraft() {
     const values = buildPayloadValues()
     const data = await saveDraft(formId.value, values)
     state.message = data?.message || 'Rascunho salvo com sucesso.'
+    await loadDrafts()
   } catch (error) {
     if (error.status === 422 && error.body?.errors) {
       const errors = error.body.errors
@@ -165,6 +246,23 @@ onMounted(() => {
           <p v-if="state.error" class="feedback error">{{ state.error }}</p>
           <p v-if="state.message" class="panel-subtitle">{{ state.message }}</p>
 
+          <div v-if="state.loadingDrafts" class="panel-subtitle">Carregando rascunhos…</div>
+          <p v-else-if="state.draftsError" class="feedback error">{{ state.draftsError }}</p>
+
+          <div v-if="!state.loadingDrafts && state.drafts.length" class="field">
+            <span>Rascunhos salvos</span>
+            <select
+              v-model="state.selectedDraftId"
+              :disabled="state.loadingDraftValues"
+              @change="handleLoadDraft(state.selectedDraftId)"
+            >
+              <option value="">Selecione um rascunho…</option>
+              <option v-for="d in state.drafts" :key="d.id" :value="d.id">
+                #{{ d.id }} · {{ d.created_at }}
+              </option>
+            </select>
+          </div>
+
           <form class="form" @submit.prevent="handleSubmit">
             <div v-for="field in state.fields" :key="field.id" class="field">
               <span>
@@ -218,7 +316,7 @@ onMounted(() => {
               <button
                 class="ghost-button"
                 type="button"
-                :disabled="state.savingDraft"
+                :disabled="state.savingDraft || state.loadingDraftValues"
                 @click.prevent="handleSaveDraft"
               >
                 <span v-if="!state.savingDraft">Salvar rascunho</span>

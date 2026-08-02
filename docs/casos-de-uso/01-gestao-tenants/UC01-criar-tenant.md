@@ -205,6 +205,17 @@ VALUES (NULL, 1, 'CREATE_TENANT', 'tenant', 1, NOW());
 
 ---
 
+## Implementação na Interface
+
+Na interface administrativa (perfil `admin-sistema`), a aplicação deve:
+
+1. Expor um menu de Tenants que leve à rota `/admin/tenants`.
+2. Listar os tenants existentes e oferecer um botão "Novo tenant".
+3. Disponibilizar um formulário de criação que coleta `name` e `slug` e, ao salvar, chame `POST /api/admin/tenants`.
+4. Exibir o novo tenant imediatamente na listagem em caso de sucesso, e mostrar erros de validação ao lado dos campos correspondentes quando ocorrerem.
+
+---
+
 **Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Fundação do sistema)

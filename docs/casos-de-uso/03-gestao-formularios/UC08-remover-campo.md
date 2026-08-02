@@ -203,6 +203,18 @@ VALUES (1, 10, 'DELETE_FIELD', 'form_field', 25,
 
 ---
 
+## Implementação na Interface
+
+Na mesma tela de gestão de campos da versão em edição, a interface deve:
+
+1. Exibir, em cada campo da lista, um botão "Remover" visível para `manager` e `admin` enquanto a versão estiver em draft.
+2. Ao acionar a remoção, exibir uma confirmação (modal/diálogo) antes de prosseguir.
+3. Confirmada a ação, chamar `DELETE /api/forms/{form_id}/versions/{version_id}/fields/{field_id}`.
+4. Em caso de sucesso, recarregar ou atualizar a lista de campos a partir da API, refletindo a remoção.
+5. Se a API indicar que a versão já foi publicada, exibir a mensagem de erro correspondente e impedir novas remoções nessa versão.
+
+---
+
 ## Casos de Uso Relacionados
 
 - **UC06:** Adicionar Campos

@@ -5,6 +5,12 @@ import FormDetailView from '../views/FormDetailView.vue'
 import FormCreateView from '../views/FormCreateView.vue'
 import FormFieldsView from '../views/FormFieldsView.vue'
 import FormFillView from '../views/FormFillView.vue'
+import AdminTenantsView from '../views/AdminTenantsView.vue'
+import TenantUsersView from '../views/TenantUsersView.vue'
+import SubmissionsListView from '../views/SubmissionsListView.vue'
+import SubmissionDetailView from '../views/SubmissionDetailView.vue'
+import AuditLogsListView from '../views/AuditLogsListView.vue'
+import AuditLogDetailView from '../views/AuditLogDetailView.vue'
 
 const routes = [
   {
@@ -38,6 +44,38 @@ const routes = [
     path: '/forms/:formId/fill',
     name: 'form-fill',
     component: FormFillView,
+    props: true,
+  },
+  {
+    path: '/admin/tenants',
+    name: 'admin-tenants',
+    component: AdminTenantsView,
+  },
+  {
+    path: '/admin/users',
+    name: 'tenant-users',
+    component: TenantUsersView,
+  },
+  {
+    path: '/submissions',
+    name: 'submissions-list',
+    component: SubmissionsListView,
+  },
+  {
+    path: '/submissions/:submissionId',
+    name: 'submission-detail',
+    component: SubmissionDetailView,
+    props: true,
+  },
+  {
+    path: '/audit-logs',
+    name: 'audit-logs-list',
+    component: AuditLogsListView,
+  },
+  {
+    path: '/audit-logs/:logId',
+    name: 'audit-log-detail',
+    component: AuditLogDetailView,
     props: true,
   },
 ]

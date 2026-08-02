@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getForm, listFormVersions, listFields, createField, deleteField } from '../api'
+import { getForm, listFormVersions, listFields, createField, updateField, deleteField } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +16,7 @@ const state = reactive({
   version: null,
   fields: [],
   saving: false,
+  editingId: null,
 })
 
 const newField = reactive({
@@ -41,6 +42,8 @@ const fieldTypes = [
 const needsOptions = computed(() =>
   ['select', 'radio', 'checkbox'].includes(newField.type),
 )
+
+const isEditing = computed(() => state.editingId !== null)
 
 async function loadData() {
   state.loading = true
@@ -74,6 +77,11 @@ function parseOptions(text) {
 }
 
 async function handleCreateField() {
+  if (isEditing.value) {
+    await handleUpdateField()
+    return
+  }
+
   state.saving = true
   state.error = ''
 
@@ -114,6 +122,77 @@ async function handleCreateField() {
   } finally {
     state.saving = false
   }
+}
+
+async function handleUpdateField() {
+  state.saving = true
+  state.error = ''
+
+  try {
+    const payload = {
+      label: newField.label,
+      name: newField.name,
+      type: newField.type,
+      is_required: !!newField.is_required,
+      order: Number(newField.order) || 1,
+    }
+
+    if (needsOptions.value) {
+      payload.options = parseOptions(newField.optionsText)
+    }
+
+    await updateField(formId.value, versionId.value, state.editingId, payload)
+
+    state.editingId = null
+    newField.label = ''
+    newField.name = ''
+    newField.type = 'text'
+    newField.is_required = true
+    newField.order = (state.fields?.length || 0) + 1
+    newField.optionsText = ''
+
+    await loadData()
+  } catch (error) {
+    if (error.status === 422 && error.body?.errors) {
+      const errors = error.body.errors
+      state.error = Object.values(errors)[0]?.[0] || 'Dados inválidos.'
+    } else if (error.status === 422 || error.status === 400) {
+      state.error = error?.body?.message || 'Versão não pode ser editada.'
+    } else if (error.status === 403) {
+      state.error = 'Você não tem permissão para editar campos deste formulário.'
+    } else {
+      state.error = error?.body?.message || 'Erro ao atualizar campo.'
+    }
+  } finally {
+    state.saving = false
+  }
+}
+
+function startEditField(field) {
+  state.editingId = field.id
+  newField.label = field.label
+  newField.name = field.name
+  newField.type = field.type
+  newField.is_required = !!field.is_required
+  newField.order = field.order
+
+  if (['select', 'radio', 'checkbox'].includes(field.type) && Array.isArray(field.options)) {
+    newField.optionsText = field.options
+      .map((opt) => `${opt.value}|${opt.label}`)
+      .join('\n')
+  } else {
+    newField.optionsText = ''
+  }
+}
+
+function cancelEdit() {
+  state.editingId = null
+  newField.label = ''
+  newField.name = ''
+  newField.type = 'text'
+  newField.is_required = true
+  newField.order = (state.fields?.length || 0) + 1
+  newField.optionsText = ''
 }
 
 async function handleDeleteField(fieldId) {
@@ -192,15 +271,20 @@ onMounted(() => {
                       <span v-if="field.is_required">· obrigatório</span>
                     </span>
                   </div>
-                  <button class="ghost-button" type="button" @click="handleDeleteField(field.id)">
-                    Remover
-                  </button>
+                  <div class="field-row-actions">
+                    <button class="ghost-button" type="button" @click="startEditField(field)">
+                      Editar
+                    </button>
+                    <button class="ghost-button" type="button" @click="handleDeleteField(field.id)">
+                      Remover
+                    </button>
+                  </div>
                 </li>
               </ul>
             </div>
 
             <div class="form-card">
-              <h3>Novo campo</h3>
+              <h3>{{ isEditing ? 'Editar campo' : 'Novo campo' }}</h3>
               <form class="form" @submit.prevent="handleCreateField">
                 <label class="field">
                   <span>Rótulo</span>
@@ -247,10 +331,17 @@ nao|Não"
                   ></textarea>
                 </label>
 
-                <button class="primary-button" type="submit" :disabled="state.saving">
-                  <span v-if="!state.saving">Adicionar campo</span>
-                  <span v-else>Salvando…</span>
-                </button>
+                <div class="form-actions-inline">
+                  <button class="primary-button" type="submit" :disabled="state.saving">
+                    <span v-if="!state.saving">
+                      {{ isEditing ? 'Salvar alterações' : 'Adicionar campo' }}
+                    </span>
+                    <span v-else>Salvando…</span>
+                  </button>
+                  <button v-if="isEditing" class="ghost-button" type="button" @click="cancelEdit">
+                    Cancelar edição
+                  </button>
+                </div>
               </form>
             </div>
           </div>

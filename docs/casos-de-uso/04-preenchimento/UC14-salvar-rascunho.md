@@ -285,6 +285,17 @@ Authorization: Bearer {token}
     "observacoes": "Completo"
   }
 }
+
+---
+
+## Implementação na Interface
+
+Na mesma tela `/forms/{formId}/fill`, o salvamento de rascunho deve ser disponibilizado para usuários autenticados:
+
+1. Enquanto preenche o formulário, o usuário deve ter a opção "Salvar rascunho" para persistir parcialmente os dados.
+2. Ao salvar rascunho, o frontend deve chamar `POST /api/forms/{form_id}/drafts` (ou `PUT` quando atualizar um rascunho existente) com os valores já preenchidos, sem exigir todos os campos obrigatórios.
+3. Rascunhos existentes para aquele formulário devem ser recuperados via `GET /api/forms/{form_id}/drafts` quando a tela de preenchimento for aberta, permitindo que o usuário escolha um rascunho recente para continuar.
+4. Quando um rascunho for carregado, os campos devem ser pré-preenchidos antes do envio final (UC13), respeitando a distinção entre status `draft` e `submitted` na API.
 ```
 
 Sistema então:

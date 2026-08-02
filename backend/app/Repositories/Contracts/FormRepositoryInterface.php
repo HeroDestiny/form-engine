@@ -9,6 +9,8 @@ interface FormRepositoryInterface
 {
     public function listAvailableForTenant(int $tenantId, ?string $search, string $sort, string $order): Collection;
 
+    public function listAllForTenant(int $tenantId, ?string $search, string $sort, string $order): Collection;
+
     public function findDetailedInTenant(int $tenantId, int $formId): ?Form;
 
     public function create(array $data): Form;

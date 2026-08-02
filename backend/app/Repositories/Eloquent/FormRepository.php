@@ -23,6 +23,19 @@ class FormRepository implements FormRepositoryInterface
         return $query->orderBy($sort, $order)->get();
     }
 
+    public function listAllForTenant(int $tenantId, ?string $search, string $sort, string $order): Collection
+    {
+        $query = Form::query()
+            ->where('tenant_id', $tenantId)
+            ->with(['versions' => fn ($builder) => $builder->orderByDesc('version_number')->withCount('fields')]);
+
+        if ($search !== null && $search !== '') {
+            $query->where('name', 'like', '%'.$search.'%');
+        }
+
+        return $query->orderBy($sort, $order)->get();
+    }
+
     public function findDetailedInTenant(int $tenantId, int $formId): ?Form
     {
         return Form::query()

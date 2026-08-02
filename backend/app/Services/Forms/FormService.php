@@ -30,9 +30,39 @@ class FormService
                     'id' => $form->id,
                     'name' => $form->name,
                     'description' => $form->description,
+                    'is_active' => $form->is_active,
                     'latest_version' => $latest ? [
                         'id' => $latest->id,
                         'version_number' => $latest->version_number,
+                        'is_published' => $latest->is_published,
+                        'published_at' => $latest->published_at,
+                        'fields_count' => $latest->fields_count,
+                    ] : null,
+                    'created_at' => $form->created_at,
+                ];
+            })
+            ->values();
+    }
+
+    public function listAllForTenant(int $tenantId, ?string $search = null, string $sort = 'name', string $order = 'asc'): Collection
+    {
+        $sortColumn = in_array($sort, ['name', 'created_at'], true) ? $sort : 'name';
+        $sortDirection = in_array(strtolower($order), ['asc', 'desc'], true) ? strtolower($order) : 'asc';
+
+        return $this->formRepository
+            ->listAllForTenant($tenantId, $search, $sortColumn, $sortDirection)
+            ->map(function (Form $form) {
+                $latest = $form->versions->first();
+
+                return [
+                    'id' => $form->id,
+                    'name' => $form->name,
+                    'description' => $form->description,
+                    'is_active' => $form->is_active,
+                    'latest_version' => $latest ? [
+                        'id' => $latest->id,
+                        'version_number' => $latest->version_number,
+                        'is_published' => $latest->is_published,
                         'published_at' => $latest->published_at,
                         'fields_count' => $latest->fields_count,
                     ] : null,
@@ -56,9 +86,11 @@ class FormService
             'id' => $form->id,
             'name' => $form->name,
             'description' => $form->description,
+            'is_active' => $form->is_active,
             'latest_version' => $latest ? [
                 'id' => $latest->id,
                 'version_number' => $latest->version_number,
+                'is_published' => $latest->is_published,
                 'published_at' => $latest->published_at,
                 'fields_count' => $latest->fields_count,
             ] : null,

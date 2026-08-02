@@ -259,6 +259,17 @@ Authorization: Bearer {token}
 
 ---
 
+## Implementação na Interface
+
+No frontend, os detalhes de uma ação auditada devem ser exibidos em uma view dedicada:
+
+1. A partir da listagem de auditoria (`/audit-logs`), o administrador clica em "Ver" em um registro específico.
+2. A navegação deve levar para `/audit-logs/{logId}`, onde o frontend consome `GET /api/audit-logs/{log_id}`.
+3. A tela deve apresentar os dados principais (usuário, ação, entidade, data/hora, IP, user agent) e os metadados formatados, seguindo o layout sugerido neste UC.
+4. Quando aplicável, botões de atalho devem permitir navegar para a entidade relacionada (por exemplo, submissão ou formulário) usando as rotas já existentes no front.
+
+---
+
 ## Testes Requeridos
 
 ### Teste de Sucesso

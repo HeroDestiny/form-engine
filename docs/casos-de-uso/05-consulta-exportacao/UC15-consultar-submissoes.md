@@ -244,6 +244,23 @@ LIMIT ? OFFSET ?;
 
 ---
 
+## Implementação na Interface
+
+A consulta de submissões deve estar disponível em dois pontos da interface:
+
+1. **Visão geral de submissões**
+  - Através do menu superior, o usuário acessa a rota `/submissions`.
+  - A tela deve listar submissões do tenant (ou apenas as próprias, no caso de papel `user`), com paginação.
+  - A interface deve expor, no mínimo, filtros por formulário e período, utilizando os parâmetros descritos neste UC; filtros adicionais (usuário, status) podem ser adicionados conforme necessidade.
+
+2. **Submissões de um formulário específico**
+  - Na tela de detalhe de um formulário, deve existir um bloco "Submissões deste formulário".
+  - Essa lista deve vir filtrada por `form_id` e mostrar ID, versão, data e contagem de campos, com link para o detalhe (UC16).
+
+3. Em ambos os casos, o frontend deve consumir o endpoint `GET /api/submissions`, aplicando os filtros apropriados (tenant, usuário atual, e opcionalmente `form_id`, `date_from`, `date_to`, etc.).
+
+---
+
 ## Testes Requeridos
 
 ### Teste de Sucesso

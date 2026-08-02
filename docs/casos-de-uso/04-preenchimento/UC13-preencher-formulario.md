@@ -258,6 +258,19 @@ VALUES (1, 25, 'SUBMIT_FORM', 'form_submission', 452,
 ### Testes de Validação
 ❌ Tentar submeter sem campo obrigatório
 ❌ Tentar submeter com tipo inválido (texto em campo número)
+
+---
+
+## Implementação na Interface
+
+No frontend, o fluxo de preenchimento deve seguir estes passos:
+
+1. A partir da lista de formulários, o usuário clica em "Preencher" em um formulário ativo com versão publicada, navegando para a rota `/forms/{formId}/fill`.
+2. A tela deve carregar a última versão publicada via API e renderizar dinamicamente os campos (tipos text, textarea, number, date, select, checkbox, etc.).
+3. O usuário preenche os campos; validações básicas (obrigatoriedade, formato) podem ser aplicadas no front, mas a validação definitiva deve ser sempre feita pelo backend.
+4. Ao enviar, o frontend deve chamar `POST /api/forms/{form_id}/submit` com o objeto `values` contendo `name -> valor` dos campos.
+5. Em caso de sucesso, a interface deve exibir uma mensagem de confirmação e oferecer voltar à lista de formulários ou visualizar submissões, dependendo do papel do usuário.
+6. Em caso de erro de validação (422), os erros por campo retornados pela API devem ser exibidos junto aos respectivos inputs.
 ❌ Tentar submeter com valor fora das options
 ❌ Tentar submeter email inválido
 ❌ Tentar submeter data inválida

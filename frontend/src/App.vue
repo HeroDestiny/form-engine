@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { logout, getCurrentUser, listForms } from './api'
+import { logout, getCurrentUser, listForms, listAllForms } from './api'
 
 const router = useRouter()
 
@@ -40,7 +40,8 @@ async function loadSession() {
 
 async function loadForms() {
   try {
-    const data = await listForms()
+    const isManagerOrAdmin = state.user && (state.user.role === 'manager' || state.user.role === 'admin')
+    const data = isManagerOrAdmin ? await listAllForms() : await listForms()
     state.forms = data?.data?.forms ?? []
   } catch (error) {
     errorMessage.value = error?.body?.message || 'Erro ao carregar formulários.'
@@ -67,11 +68,33 @@ onMounted(() => {
         <span class="brand-mark">FE</span>
         <div class="brand-text">
           <h1>Form Engine</h1>
-          <p>Frontend · Vue 3 SPA</p>
+          <p>Painel principal</p>
         </div>
       </div>
 
       <div v-if="state.user" class="user-chip">
+        <nav class="header-nav">
+          <button class="ghost-button" type="button" @click="router.push('/')">Formulários</button>
+          <button class="ghost-button" type="button" @click="router.push('/submissions')">Submissões</button>
+          <button
+            v-if="state.user.role === 'admin'"
+            class="ghost-button"
+            type="button"
+            @click="router.push('/admin/users')"
+          >
+            Usuários
+          </button>
+          <button
+            v-if="state.user.role === 'admin-sistema'"
+            class="ghost-button"
+            type="button"
+            @click="router.push('/admin/tenants')"
+          >
+            Tenants
+          </button>
+          <button class="ghost-button" type="button" @click="router.push('/audit-logs')">Auditoria</button>
+        </nav>
+
         <div class="user-main">
           <span class="user-name">{{ state.user.name }}</span>
           <span class="user-role">{{ state.user.role }}</span>
@@ -87,9 +110,9 @@ onMounted(() => {
       <section class="panel panel-forms">
         <div class="panel-header">
           <div>
-            <h2>Formulários disponíveis</h2>
+            <h2>Formulários</h2>
             <p class="panel-subtitle">
-              Lista de formulários ativos com versão publicada para o seu tenant.
+              Usuários veem apenas formulários ativos com versão publicada. Managers/Admins veem todos os formulários do tenant.
             </p>
           </div>
           <div class="panel-actions">
@@ -121,6 +144,18 @@ onMounted(() => {
                 <span>Versão {{ form.latest_version.version_number }}</span>
                 <span v-if="form.latest_version.fields_count !== undefined">
                   {{ form.latest_version.fields_count }} campo(s)
+                </span>
+                <span class="form-status">
+                  ·
+                  <template v-if="form.is_active === false">
+                    inativo
+                  </template>
+                  <template v-else-if="form.latest_version && form.latest_version.is_published">
+                    ativo
+                  </template>
+                  <template v-else>
+                    rascunho
+                  </template>
                 </span>
               </div>
             </RouterLink>

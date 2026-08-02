@@ -263,6 +263,17 @@ LIMIT ? OFFSET ?;
 
 ---
 
+## Implementação na Interface
+
+No frontend, a consulta de auditoria deve estar disponível para administradores do tenant:
+
+1. O menu de navegação deve exibir a opção "Auditoria" para usuários com papel `admin`, levando à rota `/audit-logs`.
+2. A tela inicial deve listar os registros mais recentes usando `GET /api/audit-logs` com paginação.
+3. A interface deve expor filtros por período, usuário, ação e entidade, conectados aos parâmetros descritos neste UC.
+4. Cada linha deve oferecer um link "Ver detalhes" que leva ao fluxo de UC19.
+
+---
+
 ## Testes Requeridos
 
 ### Teste de Sucesso

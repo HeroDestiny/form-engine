@@ -15,12 +15,19 @@ class FormController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $forms = $this->formService->listAvailableForTenant(
-            (int) $request->user()?->tenant_id,
-            $request->filled('search') ? $request->string('search')->toString() : null,
-            $request->string('sort')->toString() ?: 'name',
-            $request->string('order')->toString() ?: 'asc',
-        );
+        $tenantId = (int) $request->user()?->tenant_id;
+        $search = $request->filled('search') ? $request->string('search')->toString() : null;
+        $sort = $request->string('sort')->toString() ?: 'name';
+        $order = $request->string('order')->toString() ?: 'asc';
+
+        $scope = $request->string('scope')->toString();
+        $role = $request->user()?->role;
+
+        if ($scope === 'all' && in_array($role, ['manager', 'admin'], true)) {
+            $forms = $this->formService->listAllForTenant($tenantId, $search, $sort, $order);
+        } else {
+            $forms = $this->formService->listAvailableForTenant($tenantId, $search, $sort, $order);
+        }
 
         return response()->json([
             'success' => true,

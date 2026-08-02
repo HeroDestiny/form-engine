@@ -253,6 +253,21 @@ ORDER BY ff."order" ASC;
 
 ---
 
+## Implementação na Interface
+
+No frontend, o detalhamento de submissão deve ser realizado em uma tela dedicada:
+
+1. A partir da lista geral de submissões (`/submissions`) ou da seção de submissões dentro de um formulário, o usuário clica em "Ver detalhes".
+2. A navegação deve levar para a rota `/submissions/{submissionId}`.
+3. A tela deve consumir `GET /api/submissions/{submissionId}` e exibir:
+  - Nome do formulário e número da versão.
+  - Status da submissão e data/hora.
+  - Lista de campos com rótulo e valor, respeitando a ordenação definida na versão do formulário.
+4. O fluxo de permissão deve seguir as regras descritas neste UC: gestores/admins veem qualquer submissão do tenant, usuários finais veem apenas as próprias.
+5. Um botão "Voltar" deve retornar para a listagem de origem.
+
+---
+
 ## Formatação de Valores por Tipo
 
 | Tipo | Armazenado | Exibido |
