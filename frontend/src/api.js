@@ -51,9 +51,15 @@ export async function login({ email, password, tenantSlug }) {
   return data;
 }
 
-export function logout() {
-  window.localStorage.removeItem('fe_token');
-  return apiRequest('/auth/logout', { method: 'POST' }).catch(() => {});
+export async function logout() {
+  try {
+    await apiRequest('/auth/logout', { method: 'POST' });
+  } catch {
+    // Mesmo que o token já tenha expirado ou a API esteja indisponível,
+    // o logout local deve sempre ser concluído.
+  } finally {
+    window.localStorage.removeItem('fe_token');
+  }
 }
 
 export function getCurrentUser() {
