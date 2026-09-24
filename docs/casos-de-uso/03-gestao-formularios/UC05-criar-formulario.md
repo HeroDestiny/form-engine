@@ -182,6 +182,21 @@ VALUES (1, 10, 'CREATE_FORM', 'form', 5, NOW());
 
 ---
 
+## Implementação na Interface
+
+A interface deve realizar este caso de uso da seguinte forma:
+
+1. Usuário com papel `manager` ou `admin` autentica no sistema.
+2. Na tela inicial (painel de formulários), deve existir um botão claro de "Novo formulário".
+3. A tela de criação de formulário deve exibir os campos:
+  - Nome (obrigatório)
+  - Descrição (opcional)
+4. Ao confirmar, o frontend deve chamar `POST /api/forms` (que usa o tenant do usuário autenticado), recebendo no payload o formulário e a versão inicial em draft.
+5. Em caso de sucesso, o usuário deve ser redirecionado automaticamente para a tela de detalhe do formulário, de onde pode ir para a gestão de campos (UC06) e, depois, para publicação (UC09).
+6. Erros de validação (ex.: nome duplicado) devem ser exibidos diretamente na tela de criação, associados aos campos correspondentes.
+
+---
+
 ## Testes Requeridos
 
 ### Teste de Sucesso
@@ -284,6 +299,6 @@ DB::transaction(function () use ($data) {
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Engine core)

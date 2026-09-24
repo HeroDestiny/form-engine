@@ -195,6 +195,17 @@ Authorization: Bearer {token}
 
 ---
 
+## Implementação na Interface
+
+Na interface, a exportação em CSV deve estar ligada principalmente à lista geral de submissões:
+
+1. Usuário com papel `manager` ou `admin` acessa `/submissions` pelo menu superior.
+2. A tela deve exibir um botão "Exportar CSV" associado ao conjunto de filtros atualmente aplicado (formulário, período, etc.).
+3. Ao acionar o botão, o frontend deve chamar `POST /api/submissions/export` (ou `GET` equivalente) com os parâmetros de filtro selecionados e iniciar o download do arquivo CSV retornado pela API.
+4. A interface deve deixar claro, na mensagem ou no nome do arquivo, qual formulário/período está sendo exportado (por exemplo, refletindo `form_id` e intervalo de datas).
+
+---
+
 ## Formatação de Valores no CSV
 
 | Tipo | Valor Original | Valor no CSV |
@@ -351,6 +362,6 @@ ExportJob::dispatch($formId, $filters, auth()->user());
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Funcionalidade core)

@@ -146,6 +146,18 @@ VALUES (1, 10, 'DEACTIVATE_FORM', 'form', 5,
 
 ---
 
+## Implementação na Interface
+
+O controle de status do formulário deve ficar concentrado na tela de detalhe do formulário:
+
+1. O gestor acessa a tela de detalhe a partir do painel principal de formulários.
+2. A interface deve mostrar, junto ao cabeçalho do formulário, um indicador de status (ativo, rascunho, inativo).
+3. Para perfis `manager` e `admin`, deve existir um botão que alterna entre "Ativar" e "Desativar" conforme o valor atual de `is_active`.
+4. Ao clicar, o frontend deve chamar `PATCH /api/forms/{form_id}/status` com `{ "is_active": true|false }` e, em caso de sucesso, atualizar o estado local e o rótulo de status.
+5. A lista de formulários na tela inicial deve refletir esse status: usuários finais veem apenas formulários ativos e publicados, enquanto gestores/admins enxergam todos (ativos e inativos) com o rótulo apropriado.
+
+---
+
 ## Impactos da Desativação
 
 ### Para Usuários Finais
@@ -307,6 +319,6 @@ Form::where('tenant_id', auth()->user()->tenant_id)
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Média

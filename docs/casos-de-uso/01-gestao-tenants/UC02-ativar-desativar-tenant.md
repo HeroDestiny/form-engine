@@ -223,6 +223,17 @@ VALUES (1, 1, 'DEACTIVATE_TENANT', 'tenant', 1, '{"previous_status": true}', NOW
 
 ---
 
+## Implementação na Interface
+
+Na tela administrativa de tenants (`/admin/tenants`), a interface deve:
+
+1. Exibir, em cada linha da tabela de tenants, o status atual (ativo/inativo) e um botão de alternância para `admin-sistema`.
+2. Ao clicar em ativar/desativar, chamar `PATCH /api/admin/tenants/{id}/status` com o novo valor de `is_active`.
+3. Atualizar o status localmente após resposta bem-sucedida, refletindo imediatamente o novo estado.
+4. Respeitar os impactos sobre autenticação e acesso às rotas dos tenants conforme as regras descritas neste UC e em UC20.
+
+---
+
 ## Notas de Implementação
 
 ### Fase 1 (v1)
@@ -238,6 +249,6 @@ VALUES (1, 1, 'DEACTIVATE_TENANT', 'tenant', 1, '{"previous_status": true}', NOW
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Média

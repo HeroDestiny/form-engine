@@ -229,6 +229,24 @@ VALUES (1, 10, 'ADD_FIELD', 'form_field', 25, '{"form_version_id": 8, "field_nam
 
 ---
 
+## Implementação na Interface
+
+A interface deve suportar a adição de campos à versão em edição da seguinte forma:
+
+1. Após criar o formulário (UC05) ou a partir da tela de detalhe do formulário, o gestor acessa a ação "Gerenciar campos da versão em edição".
+2. A rota `/forms/{formId}/versions/{versionId}/fields` deve exibir:
+  - À esquerda, a lista de campos da versão (com opções para editar/remover).
+  - À direita, um formulário para criar (ou editar) um campo.
+3. O formulário de campo deve permitir informar:
+  - Rótulo, nome técnico (snake_case), tipo, ordem, obrigatoriedade.
+  - Opções em texto multi‑linha para tipos select/radio/checkbox, no formato `valor|rótulo` por linha.
+4. Ao salvar, o frontend deve chamar `POST /api/forms/{formId}/versions/{versionId}/fields` ou `PUT /api/forms/{formId}/versions/{versionId}/fields/{fieldId}` conforme o caso.
+5. A interface deve garantir que:
+  - Não é possível adicionar/editar/remover campos de versões publicadas (mostrando a mensagem de erro da API ou desabilitando ações quando aplicável).
+  - Erros de validação (nome duplicado, options obrigatórias, etc.) sejam exibidos de forma clara para o usuário.
+
+---
+
 ## Testes Requeridos
 
 ### Teste de Sucesso
@@ -306,6 +324,6 @@ VALUES (1, 10, 'ADD_FIELD', 'form_field', 25, '{"form_version_id": 8, "field_nam
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Engine core)

@@ -221,6 +221,18 @@ VALUES (1, 10, 'UPDATE_FIELD', 'form_field', 25, '{"changes": {"label": "..."}}'
 
 ---
 
+## Implementação na Interface
+
+Na tela de gestão de campos da versão em edição, a interface deve:
+
+1. Exibir a lista de campos da versão draft em uma coluna, cada item com ações "Editar" e "Remover".
+2. Ao clicar em "Editar", carregar os dados do campo selecionado no formulário de campos à direita (o mesmo usado para criação em UC06), trocando o modo para edição.
+3. Fazer com que o botão principal salve alterações chamando `PUT /api/forms/{form_id}/versions/{version_id}/fields/{field_id}`.
+4. Disponibilizar um botão "Cancelar edição" que limpa o formulário e retorna ao modo de criação de novo campo.
+5. Bloquear tentativas de edição em versões publicadas, exibindo claramente a mensagem de erro retornada pela API e tratando a versão como somente leitura.
+
+---
+
 ## Casos de Uso Relacionados
 
 - **UC06:** Adicionar Campos
@@ -254,6 +266,6 @@ AuditLog::create([
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Média

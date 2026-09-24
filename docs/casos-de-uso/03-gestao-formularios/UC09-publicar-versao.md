@@ -203,6 +203,20 @@ VALUES (1, 10, 'PUBLISH_VERSION', 'form_version', 8,
 
 ---
 
+## Implementação na Interface
+
+A publicação de versão deve ser feita diretamente na tela de detalhe do formulário:
+
+1. O gestor acessa a tela de detalhe via lista de formulários.
+2. A interface deve mostrar o status do formulário (ativo/inativo) e da versão (publicada/rascunho).
+3. Se existir uma versão em edição (draft) com campos configurados, um botão "Publicar versão em edição" deve ficar disponível.
+4. Ao clicar, o frontend deve chamar `POST /api/forms/{formId}/versions/{versionId}/publish`.
+5. Em caso de sucesso, a tela deve ser atualizada, exibindo a versão publicada e uma mensagem de confirmação.
+6. Em caso de erro (sem campos, versão inválida, falta de permissão), a mensagem retornada pela API deve ser exibida em destaque.
+7. Após a publicação, a interface deve exibir a opção de "Criar nova versão" (UC10), quando aplicável.
+
+---
+
 ## Efeitos da Publicação
 
 ### Para Usuários Finais
@@ -335,6 +349,6 @@ A imutabilidade é garantida pela validação nas operações de edição/remoç
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Funcionalidade core)

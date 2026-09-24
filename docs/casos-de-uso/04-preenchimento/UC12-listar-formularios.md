@@ -235,6 +235,17 @@ ORDER BY f.name ASC;
 
 ---
 
+## Implementação na Interface
+
+A listagem de formulários deve ser o painel inicial após o login:
+
+1. Usuário com papel `user` deve consumir `GET /api/forms` sem parâmetros extras, vendo apenas formulários ativos com versão publicada (conforme regras deste UC).
+2. Usuários com papel `manager` ou `admin` devem acessar a mesma tela, mas o frontend deve chamar a listagem administrativa (`GET /api/forms?scope=all`), exibindo também formulários inativos ou ainda não publicados, com um rótulo de status (ativo, rascunho, inativo).
+3. Cada card de formulário deve exibir nome, descrição, versão publicada (quando existe) e indicar visualmente se está disponível para preenchimento ou apenas para gestão.
+4. O botão "Preencher" deve aparecer apenas quando houver versão publicada e o formulário estiver ativo; caso contrário, o gestor deve poder acessar o detalhe para gerenciar versão, campos e status.
+
+---
+
 ## Melhorias Futuras (Fora do Escopo v1)
 
 ### Filtros Avançados
@@ -291,6 +302,6 @@ Form::where('tenant_id', auth()->user()->tenant_id)
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Experiência do usuário)

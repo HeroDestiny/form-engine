@@ -236,6 +236,16 @@ VALUES (NULL, NULL, 'LOGIN_FAILED', 'user', NULL,
 
 ---
 
+## Implementação na Interface
+
+O fluxo de login da SPA deve corresponder diretamente a este caso de uso:
+
+1. Na rota `/login`, o formulário deve coletar `email` e `password` do usuário.
+2. Ao enviar, o frontend deve chamar `POST /api/auth/login`; em caso de sucesso, o token retornado deve ser armazenado (por exemplo, em localStorage) e usado automaticamente nas próximas requisições via header `Authorization: Bearer {token}`.
+3. Os dados do usuário autenticado (incluindo `role` e informações do tenant) devem ser mantidos em estado global para controlar a navegação e as permissões de menu.
+4. Mensagens de erro genéricas de credencial inválida, usuário desativado ou tenant desativado devem ser exibidas conforme a resposta da API, alinhadas aos fluxos alternativos deste UC.
+---
+
 ## Interface Visual Sugerida
 
 ### Tela de Login
@@ -417,6 +427,6 @@ public function logout(Request $request)
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Fundação do sistema)

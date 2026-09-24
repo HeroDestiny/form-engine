@@ -251,6 +251,17 @@ VALUES (1, 1, 'DEACTIVATE_USER', 'user', 10, '{"previous_status": true}', NOW())
 
 ---
 
+## Implementação na Interface
+
+Na tela de gestão de usuários do tenant (`/tenants/{tenantId}/users`), a interface deve:
+
+1. Exibir, para cada usuário, um indicador de status (ativo/inativo) e um botão para alternar esse status, disponível apenas para `admin`.
+2. Ao clicar em ativar/desativar, chamar `PATCH /api/tenants/{tenant_id}/users/{user_id}/status` com o novo valor de `is_active`.
+3. Atualizar a linha na tabela após resposta bem-sucedida, refletindo imediatamente o novo status.
+4. Trabalhar em conjunto com a tela de login e os middlewares para garantir o efeito prático deste UC: usuários desativados deixam de conseguir autenticar, enquanto seus dados históricos permanecem acessíveis conforme descrito aqui.
+
+---
+
 ## Notas de Implementação
 
 ### Validação de Auto-desativação
@@ -277,6 +288,6 @@ Na v1, tokens continuam válidos até expiração natural. Em versões futuras, 
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Média

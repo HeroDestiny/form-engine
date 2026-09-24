@@ -256,6 +256,17 @@ VALUES (1, 1, 'CREATE_USER', 'user', 10, NOW());
 
 ---
 
+## Implementação na Interface
+
+Na SPA, a gestão de usuários do tenant deve ser feita em uma tela própria acessível por `admin`:
+
+1. O administrador acessa o menu de Usuários e navega para `/tenants/{tenantId}/users`.
+2. A tela deve listar usuários do tenant com nome, e-mail, papel e status, oferecendo um botão "Novo usuário".
+3. O formulário de criação deve enviar `name`, `email`, `password` e `role` para `POST /api/tenants/{tenant_id}/users`.
+4. Após criação bem-sucedida, o novo usuário deve aparecer na lista; erros de validação (e-mail duplicado, senha curta, etc.) devem ser exibidos diretamente na tela.
+
+---
+
 ## Notas de Implementação
 
 ### Validação de E-mail
@@ -279,6 +290,6 @@ User::where('tenant_id', auth()->user()->tenant_id)->get();
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Fundação do sistema)

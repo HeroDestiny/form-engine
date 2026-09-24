@@ -258,6 +258,17 @@ VALUES (1, 10, 'CREATE_VERSION', 'form_version', 12,
 
 ---
 
+## Implementação na Interface
+
+Na tela de detalhe do formulário, a interface deve tratar a criação de nova versão assim:
+
+1. Quando houver uma versão publicada e nenhuma versão em edição, deve existir um botão "Criar nova versão" visível para `manager` e `admin`.
+2. Ao clicar, o frontend deve chamar `POST /api/forms/{form_id}/versions`, que retorna a nova versão em draft e os campos copiados.
+3. A tela de detalhe deve ser atualizada para indicar que existe uma "versão em edição" e oferecer o link para "Gerenciar campos da versão em edição".
+4. Se a API indicar que já existe uma versão draft, a interface deve apenas redirecionar para a gestão dessa versão, seguindo o fluxo alternativo FA01.
+
+---
+
 ## Casos de Uso Relacionados
 
 - **UC09:** Publicar Versão (pré-requisito)
@@ -340,6 +351,6 @@ DB::transaction(function () use ($formId) {
 
 ---
 
-**Última atualização:** 2026-03-22
+**Última atualização:** 2026-03-31
 **Status:** Especificado
 **Prioridade:** Alta (Versionamento core)

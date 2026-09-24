@@ -1,8 +1,8 @@
 # 📌 Form Engine
 
-![Status](https://img.shields.io/badge/status-em%20planejamento-yellow)
-![Laravel](https://img.shields.io/badge/laravel-%5E10.0-red)
-![Vue](https://img.shields.io/badge/vue-3.x-brightgreen)
+![Status](https://img.shields.io/badge/status-fases%201-2%20completas-brightgreen)
+![Laravel](https://img.shields.io/badge/laravel-%5E13.0-red)
+![Frontend](https://img.shields.io/badge/frontend-nao%20iniciado-lightgrey)
 ![Docker](https://img.shields.io/badge/docker-enabled-blue)
 
 ## 📖 Visão Geral
@@ -26,8 +26,8 @@ O projeto demonstra uma arquitetura moderna, organizada em camadas, orientada a 
 
 | Componente | Tecnologia |
 |------------|------------|
-| **Backend** | Laravel (API REST) |
-| **Frontend** | Vue 3 (SPA) |
+| **Backend** | Laravel 13 (API REST) |
+| **Frontend** | Não implementado ainda |
 | **Banco de Dados** | PostgreSQL |
 | **Cache** | Redis |
 | **Containerização** | Docker + Docker Compose |
@@ -104,36 +104,36 @@ O projeto adota **separação clara entre Backend e Frontend**, com repositório
 
 ## 🗺️ Roadmap
 
-### Fase 1 – Fundação Arquitetural ✅ **DOCUMENTAÇÃO COMPLETA**
+### Fase 1 – Fundação Arquitetural ✅ **DOCUMENTAÇÃO + BASE DO BACKEND**
 - [x] ✅ Documentação de visão do produto
 - [x] ✅ Documentação de arquitetura técnica
 - [x] ✅ Modelo de dados completo
 - [x] ✅ 21 casos de uso especificados
-- [x] ✅ Especificação API REST (28 endpoints)
-- [ ] Configuração do ambiente Docker (backend + frontend separados)
-- [ ] Estrutura base do Backend (Laravel API)
+- [x] ✅ Especificação API REST (29 endpoints)
+- [x] ✅ Configuração do ambiente Docker (backend + frontend separados)
+- [x] ✅ Estrutura base do Backend (Laravel API)
 - [ ] Configuração de CI/CD
-- [ ] Padrão de camadas implementado
+- [x] ✅ Padrão de camadas implementado
 
-### Fase 2 – Multi-tenant Institucional
-- [ ] Modelo de dados para unidades administrativas
-- [ ] Middleware de isolamento
-- [ ] Gestão de usuários por tenant
-- [ ] Testes de isolamento
+### Fase 2 – Multi-tenant Institucional ✅ **COMPLETA**
+- [x] ✅ Modelo de dados para unidades administrativas
+- [x] ✅ Middleware de isolamento
+- [x] ✅ Gestão de usuários por tenant
+- [x] ✅ Testes de isolamento
 
 ### Fase 3 – Fichas Dinâmicas Versionadas
-- [ ] Estrutura base do Frontend (Vue 3 SPA)
+- [ ] Estrutura base do Frontend (SPA ainda não iniciada)
 - [ ] Comunicação API REST entre frontend e backend
 - [ ] Engine de renderização de formulários
-- [ ] Sistema de versionamento
+- [x] ✅ Sistema de versionamento (Backend completo)
 - [ ] Validação dinâmica
 - [ ] Interface de criação de fichas
 
 ### Fase 4 – Auditoria e Exportação
-- [ ] Log de auditoria
-- [ ] Exportação CSV
+- [x] ✅ Log de auditoria
+- [x] ✅ Exportação CSV
 - [ ] Relatórios básicos
-- [ ] API de consulta
+- [x] ✅ API de consulta
 
 ## 🚀 Início Rápido
 
@@ -157,11 +157,11 @@ cd form-engine
 # Permitir execução de scripts (apenas uma vez)
 Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 
-# Verificar ambiente
-.\scripts\dev.ps1 check
+# Subir containers e backend
+\.\scripts\dev.ps1 up
 
-# Configuração automática completa
-.\scripts\dev.ps1 init
+# Executar migrations do banco
+\.\scripts\dev.ps1 migrate
 
 # URLs de acesso
 # Backend API: http://localhost:8000
@@ -176,20 +176,13 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 git clone https://github.com/seu-usuario/form-engine.git
 cd form-engine
 
-# Criar projeto Laravel
-docker run --rm -v $(pwd)/backend:/app composer create-project laravel/laravel:^11.0 .
-
-# Configurar ambiente
-cd backend
+# (Opcional) Configurar variáveis de ambiente
 cp .env.example .env
-cd ..
 
-# Subir containers
+# Subir containers (backend, nginx, postgres, redis)
 docker-compose up -d
 
-# Instalar dependências e configurar
-docker-compose exec backend composer install
-docker-compose exec backend php artisan key:generate
+# Executar migrations do banco
 docker-compose exec backend php artisan migrate
 
 # URLs de acesso
@@ -227,8 +220,6 @@ docker-compose exec backend php artisan test --coverage
 # Executar testes específicos
 docker-compose exec backend php artisan test --filter=FormTest
 ```
-docker-compose exec frontend npm run test:watch
-```
 
 ## 📚 Documentação
 
@@ -253,7 +244,7 @@ O projeto possui documentação técnica abrangente:
 
 Cada caso inclui: fluxos, regras de negócio, validações, testes, exemplos de código e interfaces.
 
-#### 🌐 API REST (28 endpoints)
+#### 🌐 API REST (29 endpoints)
 - **[Guia da API](docs/api/README.md)** - Documentação completa
 - **[OpenAPI/Swagger](docs/api/openapi.yaml)** - Especificação formal
 - **[Quick Reference](docs/api/quick-reference.md)** - Referência rápida
@@ -328,7 +319,7 @@ form-engine/
 │   │   ├── 06-auditoria/
 │   │   └── 07-autenticacao/
 │   └── api/                 # Especificação da API REST
-│       ├── openapi.yaml     # OpenAPI 3.0 (28 endpoints)
+│       ├── openapi.yaml     # OpenAPI 3.0 (29 endpoints)
 │       ├── README.md        # Guia completo da API
 │       ├── quick-reference.md
 │       └── postman-collection.json
@@ -349,7 +340,7 @@ form-engine/
 - **`docker/`** - Dockerfiles e configurações de containers
 - **`docs/`** - Documentação técnica e conceitual completa
   - **`casos-de-uso/`** - 21 casos de uso detalhados (6.834 linhas)
-  - **`api/`** - Especificação OpenAPI 3.0 (28 endpoints)
+       - **`api/`** - Especificação OpenAPI 3.0 (29 endpoints)
 - **`scripts/`** - Scripts utilitários para desenvolvimento
 - **`docker-compose.yml`** - Definição dos serviços (backend, nginx, postgres, redis)
 
