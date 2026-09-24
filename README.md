@@ -1,139 +1,122 @@
 # 📌 Form Engine
 
-![Status](https://img.shields.io/badge/status-fases%201-2%20completas-brightgreen)
+![Status](https://img.shields.io/badge/status-v1%20em%20estabiliza%C3%A7%C3%A3o-blue)
 ![Laravel](https://img.shields.io/badge/laravel-%5E13.0-red)
-![Frontend](https://img.shields.io/badge/frontend-nao%20iniciado-lightgrey)
+![Vue](https://img.shields.io/badge/vue-3.x-brightgreen)
 ![Docker](https://img.shields.io/badge/docker-enabled-blue)
+![CI](https://img.shields.io/badge/CI-GitHub%20Actions-black)
 
 ## 📖 Visão Geral
 
-O **Form Engine** é um sistema modular para gerenciamento de formulários dinâmicos, com isolamento multi-tenant por unidade administrativa, versionamento de estruturas e auditoria básica.
+O **Form Engine** é um sistema modular para gerenciamento de formulários dinâmicos, com isolamento multi-tenant por unidade administrativa, versionamento de estruturas, preenchimento, auditoria e exportação de dados.
 
-O projeto demonstra uma arquitetura moderna, organizada em camadas, orientada a testes e preparada para evolução institucional.
+A v1 já possui backend Laravel e frontend Vue 3 funcionais. O projeto está em fase de estabilização, com foco em testes, automação de qualidade, documentação e ajustes de UX.
 
 ## 🎯 Objetivos do Projeto
 
-- ✅ Implementar arquitetura em camadas (Controller → Service → Repository)
-- ✅ Garantir isolamento multi-tenant por unidade administrativa
-- ✅ Permitir criação de fichas dinâmicas
-- ✅ Implementar versionamento de ficha
-- ✅ Implementar auditoria básica de ações
-- ✅ Garantir qualidade por meio de testes de integração
+- ✅ Arquitetura em camadas (Controller → Service → Repository)
+- ✅ Isolamento multi-tenant por unidade administrativa
+- ✅ Fichas dinâmicas com campos customizáveis
+- ✅ Versionamento e publicação de estruturas
+- ✅ Preenchimento e rascunhos
+- ✅ Auditoria de ações
+- ✅ Exportação CSV
+- ✅ Frontend SPA em Vue 3
+- ✅ Testes de integração/contrato do backend
+- ✅ CI com GitHub Actions
 
-## 🏗️ Arquitetura
-
-### Stack Tecnológica
+## 🏗️ Stack
 
 | Componente | Tecnologia |
 |------------|------------|
-| **Backend** | Laravel 13 (API REST) |
-| **Frontend** | Não implementado ainda |
+| **Backend** | Laravel 13 / PHP 8.3 |
+| **Frontend** | Vue 3 + Vue Router + Vite |
 | **Banco de Dados** | PostgreSQL |
-| **Cache** | Redis |
-| **Containerização** | Docker + Docker Compose |
+| **Cache / Queue** | Redis |
+| **Autenticação** | Laravel Sanctum |
+| **Containerização** | Docker + Docker Compose (backend/infra) |
+| **CI** | GitHub Actions |
 
-### Estrutura de Separação
+### Arquitetura de execução em desenvolvimento
 
-O projeto adota **separação clara entre Backend e Frontend**, com repositórios/diretórios independentes:
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   FORM ENGINE                        │
-└───────────────┬────────────────┬────────────────────┘
-                │                │
-        ┌───────▼──────┐  ┌──────▼────────┐
-        │   BACKEND    │  │   FRONTEND    │
-        │  (Laravel)   │  │    (Vue 3)    │
-        │              │  │               │
-        │  REST API    │◄─┤  HTTP/JSON    │
-        │  :8000       │  │  :3000        │
-        └──────┬───────┘  └───────────────┘
-               │
-        ┌──────▼──────┐
-        │  PostgreSQL │
-        │   Redis     │
-        └─────────────┘
+```text
+Vue 3 / Vite (:5173)
+        │
+        │ HTTP / JSON
+        ▼
+Nginx (:8000)
+        │
+        ▼
+Laravel API
+   │       │
+   ▼       ▼
+PostgreSQL Redis
 ```
 
-### Padrão Arquitetural (Backend)
+O `docker-compose.yml` atual sobe backend, Nginx, PostgreSQL, Redis e pgAdmin opcional. O frontend é executado separadamente via Vite durante o desenvolvimento.
 
-```
-┌─────────────┐
-│ Controller  │  ← Recebe requisições HTTP (API)
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│  Service    │  ← Lógica de negócio
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│ Repository  │  ← Acesso a dados
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│   Model     │  ← Eloquent ORM
-└─────────────┘
-```
+## 📦 Funcionalidades da v1
 
-### Princípios
-
-- **Separação Backend/Frontend**: Aplicações independentes com comunicação via API REST
-- **Separation of Concerns**: Cada camada tem responsabilidade única
-- **API First**: Backend expõe apenas endpoints REST (JSON)
-- **SPA Architecture**: Frontend como Single Page Application
-- **Dependency Injection**: Facilitando testes e manutenção
-- **Repository Pattern**: Abstração da camada de dados
-- **Service Layer**: Centralização da lógica de negócio
-
-## 📦 Escopo da v1
-
-### ✅ Funcionalidades Incluídas
-
-- 🏢 **Multi-tenant** por unidade administrativa
-- 📝 **Fichas dinâmicas** com campos customizáveis
-- 📌 **Versionamento** de estrutura de fichas
-- 📊 **Auditoria básica** de ações do usuário
-- 📥 **Exportação** de dados em CSV
-
-### ❌ Fora do Escopo (v1)
-
-- ❌ Dashboard analítico avançado
-- ❌ Hierarquia estadual complexa
-- ❌ Sistema avançado de permissões granulares
-- ❌ Arquitetura em microserviços
+- 🏢 Gestão de tenants
+- 👥 Gestão de usuários por tenant
+- 🔐 Autenticação Bearer Token com Laravel Sanctum
+- 🧭 Autorização por papéis (`user`, `manager`, `admin`, `admin-sistema`)
+- 📝 Criação e gestão de formulários
+- 🧩 Campos dinâmicos
+- 📌 Versionamento e publicação de formulários
+- ✍️ Preenchimento de formulários
+- 💾 Salvamento de rascunhos
+- 📥 Consulta de submissões
+- 📤 Exportação CSV por formulário
+- 📊 Auditoria de ações
+- 🖥️ SPA Vue 3 cobrindo os fluxos principais
 
 ## 🗺️ Roadmap
 
-### Fase 1 – Fundação Arquitetural ✅ **DOCUMENTAÇÃO + BASE DO BACKEND**
-- [x] ✅ Documentação de visão do produto
-- [x] ✅ Documentação de arquitetura técnica
-- [x] ✅ Modelo de dados completo
-- [x] ✅ 21 casos de uso especificados
-- [x] ✅ Especificação API REST (29 endpoints)
-- [x] ✅ Configuração do ambiente Docker (backend + frontend separados)
-- [x] ✅ Estrutura base do Backend (Laravel API)
-- [ ] Configuração de CI/CD
-- [x] ✅ Padrão de camadas implementado
+### Fase 1 – Fundação Arquitetural ✅
 
-### Fase 2 – Multi-tenant Institucional ✅ **COMPLETA**
-- [x] ✅ Modelo de dados para unidades administrativas
-- [x] ✅ Middleware de isolamento
-- [x] ✅ Gestão de usuários por tenant
-- [x] ✅ Testes de isolamento
+- [x] Documentação de visão do produto
+- [x] Documentação de arquitetura técnica
+- [x] Modelo de dados
+- [x] 21 casos de uso especificados
+- [x] Especificação REST com 29 endpoints
+- [x] Ambiente Docker para backend/infra
+- [x] Estrutura base do backend
+- [x] Padrão de camadas
+- [x] CI com GitHub Actions
 
-### Fase 3 – Fichas Dinâmicas Versionadas
-- [ ] Estrutura base do Frontend (SPA ainda não iniciada)
-- [ ] Comunicação API REST entre frontend e backend
-- [ ] Engine de renderização de formulários
-- [x] ✅ Sistema de versionamento (Backend completo)
-- [ ] Validação dinâmica
-- [ ] Interface de criação de fichas
+### Fase 2 – Multi-tenant Institucional ✅
 
-### Fase 4 – Auditoria e Exportação
-- [x] ✅ Log de auditoria
-- [x] ✅ Exportação CSV
+- [x] Modelo de unidades administrativas
+- [x] Middleware de isolamento
+- [x] Gestão de usuários por tenant
+- [x] Autorização por papel
+- [x] Testes de isolamento
+
+### Fase 3 – Fichas Dinâmicas Versionadas ✅
+
+- [x] SPA Vue 3
+- [x] Comunicação frontend ↔ API REST
+- [x] Renderização dinâmica de formulários
+- [x] Sistema de versionamento
+- [x] Validação dinâmica no backend
+- [x] Interface de criação e edição de formulários/campos
+
+### Fase 4 – Auditoria e Exportação 🟡
+
+- [x] Log de auditoria
+- [x] Exportação CSV
+- [x] API de consulta
 - [ ] Relatórios básicos
-- [x] ✅ API de consulta
+
+### Estabilização da v1
+
+- [x] CI de backend e frontend
+- [ ] Testes automatizados do frontend
+- [ ] Guards centralizados no Vue Router
+- [ ] Testes de integração periódicos com PostgreSQL
+- [ ] Consolidação do padrão Service/Repository em controllers maiores
+- [ ] Pipeline de deploy
 
 ## 🚀 Início Rápido
 
@@ -141,236 +124,174 @@ O projeto adota **separação clara entre Backend e Frontend**, com repositório
 
 - Docker >= 20.10
 - Docker Compose >= 2.0
+- Node.js >= 22
 - Git
 
-> 🪟 **Usuários Windows**: Se encontrar erro "execução de scripts foi desabilitada", veja o guia [WINDOWS_SETUP.md](WINDOWS_SETUP.md)
-
-### Instalação
-
-#### 🪟 Windows (PowerShell)
-
-```powershell
-# Clone o repositório
-git clone https://github.com/seu-usuario/form-engine.git
-cd form-engine
-
-# Permitir execução de scripts (apenas uma vez)
-Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
-
-# Subir containers e backend
-\.\scripts\dev.ps1 up
-
-# Executar migrations do banco
-\.\scripts\dev.ps1 migrate
-
-# URLs de acesso
-# Backend API: http://localhost:8000
-# PostgreSQL: localhost:5432
-# Redis: localhost:6379
-```
-
-#### 🐧 Linux/Mac (Bash)
+### Clone
 
 ```bash
-# Clone o repositório
-git clone https://github.com/seu-usuario/form-engine.git
+git clone https://github.com/HeroDestiny/form-engine.git
 cd form-engine
+```
 
-# (Opcional) Configurar variáveis de ambiente
+### Backend e infraestrutura
+
+Configure as variáveis de ambiente conforme necessário:
+
+```bash
 cp .env.example .env
+```
 
-# Subir containers (backend, nginx, postgres, redis)
-docker-compose up -d
+Suba os serviços:
 
-# Executar migrations do banco
-docker-compose exec backend php artisan migrate
+```bash
+docker compose up -d
+docker compose exec backend php artisan migrate
+```
 
-# URLs de acesso
-# Backend API: http://localhost:8000
-# PostgreSQL: localhost:5432
-# Redis: localhost:6379
+Backend/API:
+
+```text
+http://localhost:8000
+```
+
+> PostgreSQL e Redis não são expostos para o host por padrão.
+
+### Frontend
+
+Em outro terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Frontend:
+
+```text
+http://localhost:5173
+```
+
+O Vite encaminha requisições `/api` para `http://localhost:8000`.
+
+### Windows / PowerShell
+
+Também é possível usar os scripts do projeto:
+
+```powershell
+.\scripts\dev.ps1 up
+.\scripts\dev.ps1 migrate
+.\scripts\dev.ps1 test
 ```
 
 ## 🧪 Testes
 
-### Backend (Laravel)
-
-#### Windows (PowerShell)
-
-```powershell
-# Executar todos os testes
-.\scripts\dev.ps1 test
-
-# Executar testes com cobertura
-.\scripts\dev.ps1 test-coverage
-
-# Executar testes específicos
-.\scripts\dev.ps1 test-filter FormTest
-```
-
-#### Linux/Mac (Bash)
+### Backend
 
 ```bash
-# Executar todos os testes
-docker-compose exec backend php artisan test
-
-# Executar testes com cobertura
-docker-compose exec backend php artisan test --coverage
-
-# Executar testes específicos
-docker-compose exec backend php artisan test --filter=FormTest
+cd backend
+php artisan test
 ```
+
+Ou via Docker:
+
+```bash
+docker compose exec backend php artisan test
+```
+
+Verificação de estilo:
+
+```bash
+cd backend
+./vendor/bin/pint --test
+```
+
+Os testes Feature incluem contratos para autenticação, autorização, formulários, fluxo de versões/campos, usuários de tenant, consultas e auditoria.
+
+### Frontend
+
+O frontend possui build de produção validado pelo CI:
+
+```bash
+cd frontend
+npm ci
+npm run build
+```
+
+Testes automatizados do frontend ainda são uma pendência da fase de estabilização.
+
+## ✅ Integração Contínua
+
+O workflow `.github/workflows/ci.yml` executa em pull requests e pushes para `main`/`dev`:
+
+- instalação das dependências PHP;
+- Laravel Pint em modo de verificação;
+- suíte de testes do backend;
+- instalação determinística das dependências frontend;
+- build de produção do Vue/Vite.
 
 ## 📚 Documentação
 
-### Documentação Completa (11.619 linhas)
+### Documentos principais
 
-O projeto possui documentação técnica abrangente:
+- [`docs/visao.md`](docs/visao.md) — visão do produto
+- [`docs/arquitetura.md`](docs/arquitetura.md) — decisões e padrões técnicos
+- [`docs/modelo_de_dados.md`](docs/modelo_de_dados.md) — modelo de dados
+- [`docs/casos-de-uso/`](docs/casos-de-uso/) — 21 casos de uso
+- [`docs/api/openapi.yaml`](docs/api/openapi.yaml) — especificação OpenAPI
+- [`docs/api/README.md`](docs/api/README.md) — guia da API
+- [`docs/api/quick-reference.md`](docs/api/quick-reference.md) — referência rápida
+- [`docs/api/postman-collection.json`](docs/api/postman-collection.json) — coleção Postman
 
-#### 📖 Documentos Principais
-- **[Visão do Produto](docs/visao.md)** - Objetivos, escopo e roadmap
-- **[Arquitetura](docs/arquitetura.md)** - Decisões técnicas e padrões
-- **[Modelo de Dados](docs/modelo_de_dados.md)** - Estrutura do banco
+## 📂 Estrutura
 
-#### 📋 Casos de Uso (21 especificados)
-- **[Documentação Completa](docs/casos-de-uso/)** - 21 casos de uso detalhados
-  - 01. Gestão de Tenants (2)
-  - 02. Gestão de Usuários (2)
-  - 03. Gestão de Formulários (7)
-  - 04. Preenchimento (3)
-  - 05. Consulta e Exportação (3)
-  - 06. Auditoria (2)
-  - 07. Autenticação (2)
-
-Cada caso inclui: fluxos, regras de negócio, validações, testes, exemplos de código e interfaces.
-
-#### 🌐 API REST (29 endpoints)
-- **[Guia da API](docs/api/README.md)** - Documentação completa
-- **[OpenAPI/Swagger](docs/api/openapi.yaml)** - Especificação formal
-- **[Quick Reference](docs/api/quick-reference.md)** - Referência rápida
-- **[Postman Collection](docs/api/postman-collection.json)** - Para testes
-
-**Recursos da API:**
-- Autenticação Bearer Token (Laravel Sanctum)
-- Padrão de resposta unificado
-- Exemplos cURL e código
-- Paginação e filtros
-- Schemas de validação
-
-### Testar a API
-
-**Via Swagger UI:**
-```bash
-docker run -p 8080:8080 -e SWAGGER_JSON=/api/openapi.yaml \
-  -v $(pwd)/docs/api:/api swaggerapi/swagger-ui
-# Acesse: http://localhost:8080
-```
-
-**Via Postman:**
-1. Importe `docs/api/postman-collection.json`
-2. Configure `base_url`: `http://localhost:8000/api`
-3. Execute "Login" para obter token
-4. Teste os endpoints
-
----
-
-## 📂 Estrutura do Projeto
-
-```
+```text
 form-engine/
-├── 📁 backend/              # API Laravel
+├── backend/                 # Laravel API
 │   ├── app/
 │   │   ├── Http/
-│   │   │   ├── Controllers/ # Controllers da API
-│   │   │   ├── Requests/    # Form Requests
-│   │   │   ├── Resources/   # API Resources
-│   │   │   └── Middleware/  # Middlewares
-│   │   ├── Services/        # Lógica de negócio
-│   │   ├── Repositories/    # Acesso a dados
-│   │   └── Models/          # Eloquent Models
+│   │   ├── Models/
+│   │   ├── Repositories/
+│   │   └── Services/
 │   ├── database/
-│   │   ├── migrations/      # Migrações do banco
-│   │   └── seeders/         # Seeds
 │   ├── routes/
-│   │   └── api.php          # Rotas da API
-│   ├── tests/
-│   │   ├── Feature/         # Testes de integração
-│   │   └── Unit/            # Testes unitários
-│   ├── .env.example
-│   └── composer.json
-│
-├── 📁 docker/               # Configurações Docker
-│   ├── backend/             
-│   │   └── Dockerfile       # Imagem do backend
-│   └── nginx/
-│       └── default.conf     # Config Nginx
-│
-├── 📁 docs/                 # Documentação
-│   ├── README.md            # Índice da documentação
-│   ├── visao.md             # Visão do produto
-│   ├── arquitetura.md       # Arquitetura técnica
-│   ├── modelo_de_dados.md  # Modelagem do banco
-│   ├── casos-de-uso/        # 21 casos de uso detalhados
-│   │   ├── 01-gestao-tenants/
-│   │   ├── 02-gestao-usuarios/
-│   │   ├── 03-gestao-formularios/
-│   │   ├── 04-preenchimento/
-│   │   ├── 05-consulta-exportacao/
-│   │   ├── 06-auditoria/
-│   │   └── 07-autenticacao/
-│   └── api/                 # Especificação da API REST
-│       ├── openapi.yaml     # OpenAPI 3.0 (29 endpoints)
-│       ├── README.md        # Guia completo da API
-│       ├── quick-reference.md
-│       └── postman-collection.json
-│
-├── 📁 scripts/              # Scripts de desenvolvimento
-│   ├── README.md            # Documentação dos scripts
-│   └── dev.ps1              # Script principal (Windows)
-│
-├── 📄 .env.example          # Variáveis de ambiente
-├── 📄 .gitignore
-├── 📄 docker-compose.yml    # Orquestração
-└── 📄 README.md             # Este arquivo
+│   └── tests/
+├── frontend/                # Vue 3 SPA
+│   ├── src/
+│   │   ├── router/
+│   │   ├── views/
+│   │   └── api.js
+│   ├── package.json
+│   └── vite.config.js
+├── docker/                  # Dockerfiles e Nginx
+├── docs/                    # Documentação funcional e técnica
+├── scripts/                 # Scripts de desenvolvimento
+├── .github/workflows/       # CI
+├── docker-compose.yml
+└── README.md
 ```
 
-### Organização
+## 🔐 Segurança
 
-- **`backend/`** - Código-fonte do Laravel (API REST)
-- **`docker/`** - Dockerfiles e configurações de containers
-- **`docs/`** - Documentação técnica e conceitual completa
-  - **`casos-de-uso/`** - 21 casos de uso detalhados (6.834 linhas)
-       - **`api/`** - Especificação OpenAPI 3.0 (29 endpoints)
-- **`scripts/`** - Scripts utilitários para desenvolvimento
-- **`docker-compose.yml`** - Definição dos serviços (backend, nginx, postgres, redis)
+O backend aplica isolamento por tenant e autorização por papel nos endpoints protegidos. Recursos pertencentes a outro tenant são tratados como não encontrados nos fluxos protegidos correspondentes.
 
-> 📖 Para mais detalhes sobre cada diretório, veja os arquivos README.md específicos dentro de cada pasta.
+Para produção, ainda é recomendável revisar a estratégia de armazenamento do token no frontend, hardening de exportações CSV e configurações específicas do ambiente de deploy.
 
 ## 🤝 Contribuindo
 
-Contribuições são bem-vindas! Por favor:
-
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
+1. Crie uma branch a partir de `main`.
+2. Faça alterações pequenas e testáveis.
+3. Execute os testes e o build localmente.
+4. Abra um Pull Request.
+5. Aguarde o CI ficar verde antes do merge.
 
 ## 📝 Licença
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+MIT.
 
-## 👥 Autores
+## 🐛 Issues
 
-- **Paulo** - *Trabalho Inicial* - [GitHub](https://github.com/seu-usuario)
+Use o rastreador do repositório para bugs e melhorias:
 
-## 📞 Suporte
-
-Tem alguma dúvida? Entre em contato:
-
-- 📧 Email: seu-email@exemplo.com
-- 🐛 Issues: [GitHub Issues](https://github.com/seu-usuario/form-engine/issues)
-
----
-
-Feito com ❤️ utilizando Laravel e Vue
+https://github.com/HeroDestiny/form-engine/issues
