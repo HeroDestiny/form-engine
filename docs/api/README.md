@@ -745,6 +745,10 @@ Auditoria aceita datas ou timestamps ISO 8601 com segundos e fuso, normalizados 
 
 Formulários aceitam `search` (até 255 caracteres, sem distinção de caixa), `sort=name|created_at`, `order=asc|desc` e `scope=available|all`. O escopo `all` só amplia resultados para manager/admin/admin-sistema. A listagem mantém coleção e total.
 
+## Limites de entrada e exportação
+
+Para os limites de entradas e exportação, consulte [a consolidação do backend](../consolidacao-backend.md#limites-de-entrada-e-exportação--etapa-seguinte). Corpos acima de 2 MiB retornam 413; valores, estruturas ou exportações acima dos tetos retornam 422. O CSV inclui proteção para fórmulas, que acrescenta tabulação às células com prefixos perigosos e preserva os dados armazenados.
+
 ## Rate Limiting
 
 O login permite 5 tentativas por minuto por IP e por combinação de e-mail/tenant,

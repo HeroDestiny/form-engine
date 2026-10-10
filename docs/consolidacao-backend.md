@@ -73,9 +73,35 @@ Para aplicar as variáveis de ambiente ao container existente: `docker compose u
 
 Não há migration nova. As mudanças usam os arquivos montados no backend local.
 
+## Limites de entrada e exportação — etapa seguinte
+
+As requisições da API têm limite de corpo de 2 MiB, com resposta 413 em JSON no middleware e no Nginx. Validações de campos/estruturas continuam retornando 422, sem alterações parciais.
+
+| Entrada | Limite |
+|---|---|
+| Texto | 1.000 caracteres |
+| Texto longo | 10.000 caracteres |
+| E-mail | 254 caracteres |
+| Número | -10^15 a 10^15 |
+| Data de campo/filtro de exportação | `YYYY-MM-DD` |
+| Campos por versão / valores por envio | 100 |
+| Nome técnico do campo | 100 caracteres |
+| Opções por campo / escolhas de checkbox | 100, sem duplicação |
+| Valor e rótulo de opção | 255 caracteres |
+| Senha recebida / slug de login | 255 / 100 caracteres |
+
+Texto conta caracteres, não bytes. Limites também se aplicam aos rascunhos, sua atualização e finalização. O limite de campos é verificado sob lock da versão; editar um campo existente continua permitido. Dados históricos não são truncados nem excluídos.
+
+CSV é limitado a 10.000 registros, 100 versões, 500 colunas (incluindo 5 fixas) e 25 MiB. `EXPORT_MAX_ROWS` e `EXPORT_MAX_BYTES` permitem reduzir esses tetos; valores configurados são limitados a 1..10000 e 1..26214400. Exceder qualquer teto retorna 422 com orientação para restringir filtros, antes do download e sem log de sucesso.
+
+A seleção inicial lê apenas IDs e IDs de versões, até o limite + 1. Esses IDs fixam os participantes e a ordem da exportação; novas submissões não entram durante a geração. Valores/usuários são lidos em lotes de 25. Cabeçalhos carregam apenas metadados dos campos, sem opções; um cache de até dois esquemas completos permite mapear opções sem reter todos os esquemas em memória. O CSV é escrito em arquivo temporário do sistema e entregue por `fpassthru`, sem formar uma string com o arquivo inteiro. O arquivo fecha após a transmissão ou em erro; falha ao auditar também libera o recurso. `EXPORT_DATA` registra linhas e bytes efetivamente preparados, não confirma que o cliente terminou de baixar. Não há snapshot transacional de alterações administrativas em nomes de usuários durante a exportação.
+
+Células textuais com prefixos de fórmula (`=`, `+`, `-`, `@` e variantes de largura completa), controles iniciais ou espaços seguidos desses prefixos recebem tabulação inicial dentro da célula delimitada. Isso inclui rótulos, nomes/e-mails, valores e labels de opções; o banco permanece intacto. A tabulação fica no dado exportado, inclusive para textos negativos, e deve ser considerada por consumidores programáticos. A proteção segue a orientação para visualização no Excel da [OWASP](https://community.owasp.org/attacks/CSV_Injection); os testes verificam o CSV serializado, não execução em Excel/LibreOffice. Não há garantia universal para todos os programas ou para arquivos editados e regravados pelo usuário.
+
+Não há migration nova. Para aplicar as variáveis ao container e recarregar o Nginx: `docker compose up -d backend`, seguido de `docker compose exec -T nginx nginx -t` e `docker compose exec -T nginx nginx -s reload`.
+
 ## Pendências para aceitação completa e produção
 
-- Definir limites de tamanho dos valores e volume de exportação; CSV ainda carrega a coleção completa para exportar. Avaliar proteção contra fórmulas ao abrir arquivos em planilhas.
 - Validar operação em produção: configuração de ambiente, backups/restauração, monitoramento e deploy. O CI remoto precisa executar após enviar as alterações.
 
 As cinco etapas desta sequência foram implementadas e verificadas; isso não é uma declaração de atendimento a todos os cenários dos 21 casos de uso nem de prontidão completa para produção.

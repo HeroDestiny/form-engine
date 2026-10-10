@@ -11,6 +11,7 @@ info:
     - Sistema de permissões baseado em papéis (RBAC)
     - Auditoria completa de ações
     - Exportação de dados em CSV
+    - Requisições limitadas a 2 MiB (413 em envelope JSON); limites detalhados em docs/consolidacao-backend.md
 
     ## Autenticação
     Todas as rotas protegidas requerem token Bearer emitido pelo Laravel Sanctum.
@@ -1340,7 +1341,14 @@ paths:
       tags:
         - Exportação
       summary: Exportar dados em CSV
-      description: Exporta submissões para CSV (manager/admin)
+      description: |
+        Exporta submissões para CSV (manager/admin/admin-sistema) com filtros por dias
+        inclusivos YYYY-MM-DD. Até 10.000 registros, 100 versões, 500 colunas e 25 MiB;
+        EXPORT_MAX_ROWS e EXPORT_MAX_BYTES podem reduzir os limites. Exceder um teto
+        retorna 422 antes do download. Valores são lidos em lotes e o arquivo é preparado
+        em disco. Células textuais com prefixos perigosos recebem tabulação inicial
+        para visualização em planilhas, inclusive cabeçalhos e labels. Essa tabulação
+        permanece nos dados exportados; dados armazenados não são alterados.
       operationId: exportSubmissions
       security:
         - bearerAuth: []
@@ -1358,6 +1366,8 @@ paths:
                   example: 5
                 version_ids:
                   type: array
+                  maxItems: 100
+                  uniqueItems: true
                   items:
                     type: integer
                   example: [1, 2]
@@ -1543,6 +1553,7 @@ components:
   schemas:
     DraftValuesPayload:
       type: object
+      description: Até 100 valores; texto até 1000 caracteres, textarea até 10000, email até 254, data YYYY-MM-DD, checkbox até 100 escolhas distintas.
       required: [values]
       properties:
         values:
@@ -1800,6 +1811,7 @@ components:
           maxLength: 255
         name:
           type: string
+          maxLength: 100
           pattern: '^[a-z0-9_]+$'
         type:
           type: string
@@ -1808,6 +1820,7 @@ components:
           type: boolean
         options:
           type: array
+          maxItems: 100
           items:
             type: object
             required:
@@ -1816,11 +1829,14 @@ components:
             properties:
               value:
                 type: string
+                maxLength: 255
               label:
                 type: string
+                maxLength: 255
         order:
           type: integer
           minimum: 1
+          maximum: 2147483647
 
     FormWithVersion:
       allOf:

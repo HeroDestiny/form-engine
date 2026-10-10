@@ -67,8 +67,12 @@ class SubmissionController extends Controller
         $csv = $this->submissionService->exportForUser($request->user(), $request->validated());
 
         return response()->streamDownload(function () use ($csv) {
-            echo $csv['content'];
-        }, $csv['filename'], ['Content-Type' => 'text/csv; charset=UTF-8']);
+            try {
+                fpassthru($csv['stream']);
+            } finally {
+                fclose($csv['stream']);
+            }
+        }, $csv['filename'], ['Content-Type' => 'text/csv; charset=UTF-8', 'Content-Length' => (string) $csv['bytes']]);
     }
 
     public function submit(SubmitFormRequest $request, int $formId): JsonResponse

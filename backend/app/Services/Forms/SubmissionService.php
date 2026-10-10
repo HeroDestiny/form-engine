@@ -42,12 +42,23 @@ class SubmissionService
             }
             if ($field->type === 'number') {
                 $fieldRules[] = 'numeric';
+                $fieldRules[] = 'between:-1000000000000000,1000000000000000';
+            }
+            if ($field->type === 'text') {
+                $fieldRules[] = 'max:'.config('limits.text_length');
+            }
+            if ($field->type === 'textarea') {
+                $fieldRules[] = 'max:'.config('limits.textarea_length');
+            }
+            if (in_array($field->type, ['select', 'radio'], true)) {
+                $fieldRules[] = 'max:255';
             }
             if ($field->type === 'email') {
                 $fieldRules[] = 'email';
+                $fieldRules[] = 'max:254';
             }
             if ($field->type === 'date') {
-                $fieldRules[] = 'date';
+                $fieldRules[] = 'date_format:Y-m-d';
             }
             if (in_array($field->type, ['select', 'radio'], true) && is_array($field->options)) {
                 $fieldRules[] = Rule::in(array_column($field->options, 'value'));
@@ -56,7 +67,8 @@ class SubmissionService
             if ($field->type === 'checkbox') {
                 $fieldRules[] = 'array';
                 $fieldRules[] = 'list';
-                $rules['values.'.$field->name.'.*'] = ['string', Rule::in(array_column($field->options ?? [], 'value'))];
+                $fieldRules[] = 'max:'.config('limits.options_per_field');
+                $rules['values.'.$field->name.'.*'] = ['string', 'max:255', 'distinct:strict', Rule::in(array_column($field->options ?? [], 'value'))];
             }
 
             $rules['values.'.$field->name] = $fieldRules;
@@ -286,16 +298,31 @@ class SubmissionService
         if (! $form) {
             throw new BusinessException('Nenhuma submissão encontrada para exportar');
         }
-        $submissions = $this->formSubmissionRepository->listForExport((int) $actor->tenant_id, $form->id, $filters);
-        if ($submissions->isEmpty()) {
+        $limit = (int) config('limits.export_rows');
+        $selection = $this->formSubmissionRepository->selectForExport((int) $actor->tenant_id, $form->id, $filters, $limit + 1);
+        if (! $selection['ids']) {
             throw new BusinessException('Nenhuma submissão encontrada para exportar');
         }
+        if (count($selection['ids']) > $limit) {
+            throw new BusinessException('Limite de registros para exportação excedido. Restrinja os filtros.');
+        }
+        if (count($selection['version_ids']) > config('limits.export_versions')) {
+            throw new BusinessException('Limite de versões para exportação excedido. Restrinja os filtros.');
+        }
 
-        $csv = $this->csvService->render($form->id, $submissions, $filters['separator'] ?? ',');
-        $this->audit->record('EXPORT_DATA', $actor->tenant_id, 'form', $form->id, [
-            'records_count' => $submissions->count(),
-            'filters' => array_intersect_key($filters, array_flip(['version_ids', 'date_from', 'date_to', 'separator'])),
-        ], $actor->id);
+        $versions = $this->formSubmissionRepository->versionsForExport((int) $actor->tenant_id, $form->id, $selection['version_ids']);
+        $submissions = $this->formSubmissionRepository->iterateForExport((int) $actor->tenant_id, $form->id, $selection['ids'], (int) config('limits.export_chunk_size'));
+        $csv = $this->csvService->render($form->id, $versions, $submissions, $filters['separator'] ?? ',');
+        try {
+            $this->audit->record('EXPORT_DATA', $actor->tenant_id, 'form', $form->id, [
+                'records_count' => $csv['records_count'],
+                'bytes' => $csv['bytes'],
+                'filters' => array_intersect_key($filters, array_flip(['version_ids', 'date_from', 'date_to', 'separator'])),
+            ], $actor->id);
+        } catch (\Throwable $exception) {
+            fclose($csv['stream']);
+            throw $exception;
+        }
 
         return $csv;
     }

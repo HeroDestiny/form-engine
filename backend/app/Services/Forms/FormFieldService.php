@@ -44,6 +44,9 @@ class FormFieldService
         return DB::transaction(function () use ($version, $payload) {
             $version = $this->lockVersion($version);
             $this->ensureEditable($version);
+            if ($version->fields()->count() >= config('limits.fields_per_version')) {
+                throw new BusinessException('Limite de campos por versão atingido.');
+            }
             $field = $this->formFieldRepository->create([
                 'form_version_id' => $version->id,
                 'label' => $payload['label'],

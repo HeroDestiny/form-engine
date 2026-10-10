@@ -6,6 +6,7 @@ use App\Http\Middleware\AuditDeniedRequests;
 use App\Http\Middleware\EnsureActiveTenant;
 use App\Http\Middleware\EnsureTenantAccess;
 use App\Http\Middleware\EnsureUserRole;
+use App\Http\Middleware\LimitRequestBody;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prependToGroup('api', AuditDeniedRequests::class);
+        $middleware->prependToGroup('api', LimitRequestBody::class);
         $middleware->redirectGuestsTo(function (Request $request): ?string {
             if ($request->is('api/*')) {
                 return null;
