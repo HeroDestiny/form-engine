@@ -4,11 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
-use App\Models\Form;
-use App\Models\FormSubmission;
-use App\Models\FormVersion;
-use App\Models\Tenant;
-use App\Models\User;
 use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -83,8 +78,8 @@ class AuditLogController extends Controller
             ], 404);
         }
 
-        $entityExists = $this->entityExists($log);
-        $relatedActionsCount = $this->relatedActionsCount($log);
+        $entityExists = $this->auditLogService->entityExists($log);
+        $relatedActionsCount = $this->auditLogService->relatedActionsCount($log);
 
         return response()->json([
             'success' => true,
@@ -113,45 +108,5 @@ class AuditLogController extends Controller
             'message' => null,
             'errors' => null,
         ]);
-    }
-
-    private function entityExists(AuditLog $log): bool
-    {
-        if (! $log->entity_type || ! $log->entity_id) {
-            return false;
-        }
-
-        $modelClass = $this->resolveEntityModelClass($log->entity_type);
-        if (! $modelClass) {
-            return false;
-        }
-
-        return $modelClass::query()->where('id', $log->entity_id)->exists();
-    }
-
-    private function relatedActionsCount(AuditLog $log): int
-    {
-        if (! $log->entity_type || ! $log->entity_id || ! $log->tenant_id) {
-            return 0;
-        }
-
-        return AuditLog::query()
-            ->where('tenant_id', $log->tenant_id)
-            ->where('entity_type', $log->entity_type)
-            ->where('entity_id', $log->entity_id)
-            ->where('id', '!=', $log->id)
-            ->count();
-    }
-
-    private function resolveEntityModelClass(string $entityType): ?string
-    {
-        return match ($entityType) {
-            'tenant' => Tenant::class,
-            'user' => User::class,
-            'form' => Form::class,
-            'form_version' => FormVersion::class,
-            'form_submission' => FormSubmission::class,
-            default => null,
-        };
     }
 }

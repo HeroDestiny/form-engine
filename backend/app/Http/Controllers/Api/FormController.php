@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreFormRequest;
+use App\Http\Requests\UpdateStatusRequest;
 use App\Services\Forms\FormService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 
 class FormController extends Controller
 {
@@ -15,19 +15,12 @@ class FormController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $tenantId = (int) $request->user()?->tenant_id;
         $search = $request->filled('search') ? $request->string('search')->toString() : null;
         $sort = $request->string('sort')->toString() ?: 'name';
         $order = $request->string('order')->toString() ?: 'asc';
 
         $scope = $request->string('scope')->toString();
-        $role = $request->user()?->role;
-
-        if ($scope === 'all' && in_array($role, ['manager', 'admin'], true)) {
-            $forms = $this->formService->listAllForTenant($tenantId, $search, $sort, $order);
-        } else {
-            $forms = $this->formService->listAvailableForTenant($tenantId, $search, $sort, $order);
-        }
+        $forms = $this->formService->listForUser($request->user(), $search, $sort, $order, $scope);
 
         return response()->json([
             'success' => true,
@@ -63,33 +56,13 @@ class FormController extends Controller
         ]);
     }
 
-    public function storeForCurrentTenant(Request $request): JsonResponse
+    public function storeForCurrentTenant(StoreFormRequest $request): JsonResponse
     {
         return $this->store($request, (int) $request->user()?->tenant_id);
     }
 
-    public function store(Request $request, int $tenantId): JsonResponse
+    public function store(StoreFormRequest $request, int $tenantId): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'name' => [
-                'required',
-                'string',
-                'min:3',
-                'max:255',
-                Rule::unique('forms', 'name')->where(static fn ($query) => $query->where('tenant_id', $tenantId)),
-            ],
-            'description' => ['nullable', 'string', 'max:1000'],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'data' => null,
-                'message' => 'Erro de validação',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
         $payload = $this->formService->createWithInitialVersion(
             $tenantId,
             $request->string('name')->toString(),
@@ -105,21 +78,8 @@ class FormController extends Controller
         ], 201);
     }
 
-    public function updateStatus(Request $request, int $formId): JsonResponse
+    public function updateStatus(UpdateStatusRequest $request, int $formId): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'is_active' => ['required', 'boolean'],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'data' => null,
-                'message' => 'Erro de validação',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
         $form = $this->formService->findInTenant((int) $request->user()?->tenant_id, $formId);
 
         if (! $form) {

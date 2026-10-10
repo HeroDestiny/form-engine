@@ -35,4 +35,9 @@ class FormSubmission extends Model
     {
         return $this->hasMany(FormSubmissionValue::class);
     }
+
+    public function submitter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
 }

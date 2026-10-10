@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Tenant;
+use App\Http\Requests\StoreTenantRequest;
+use App\Http\Requests\UpdateStatusRequest;
 use App\Services\TenantService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 
 class AdminTenantController extends Controller
 {
@@ -36,22 +36,8 @@ class AdminTenantController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreTenantRequest $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'name' => ['required', 'string', 'min:3', 'max:255'],
-            'slug' => ['required', 'string', 'regex:/^[a-z0-9-]+$/', 'unique:tenants,slug'],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'data' => null,
-                'message' => 'Erro de validação',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
         $tenant = $this->tenantService->create(
             $request->string('name')->toString(),
             $request->string('slug')->toString(),
@@ -65,22 +51,9 @@ class AdminTenantController extends Controller
         ], 201);
     }
 
-    public function updateStatus(Request $request, int $tenantId): JsonResponse
+    public function updateStatus(UpdateStatusRequest $request, int $tenantId): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'is_active' => ['required', 'boolean'],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'data' => null,
-                'message' => 'Erro de validação',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $tenant = Tenant::query()->find($tenantId);
+        $tenant = $this->tenantService->find($tenantId);
 
         if (! $tenant) {
             return response()->json([

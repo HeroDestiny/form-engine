@@ -13,4 +13,8 @@ interface AuditLogRepositoryInterface
     public function listForTenant(int $tenantId, ?string $action): Collection;
 
     public function findInTenant(int $tenantId, int $logId): ?AuditLog;
+
+    public function entityExists(AuditLog $log): bool;
+
+    public function relatedActionsCount(AuditLog $log): int;
 }

@@ -28,4 +28,9 @@ class TenantService
     {
         return $this->tenantRepository->updateStatus($tenant, $isActive);
     }
+
+    public function find(int $tenantId): ?Tenant
+    {
+        return $this->tenantRepository->find($tenantId);
+    }
 }

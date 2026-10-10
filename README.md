@@ -115,7 +115,7 @@ O `docker-compose.yml` atual sobe backend, Nginx, PostgreSQL, Redis e pgAdmin op
 - [ ] Testes automatizados do frontend
 - [ ] Guards centralizados no Vue Router
 - [ ] Testes de integração periódicos com PostgreSQL
-- [ ] Consolidação do padrão Service/Repository em controllers maiores
+- [x] Consolidação do padrão Service/Repository e validação via Form Requests
 - [ ] Pipeline de deploy
 
 ## 🚀 Início Rápido
@@ -184,6 +184,36 @@ Também é possível usar os scripts do projeto:
 .\scripts\dev.ps1 migrate
 .\scripts\dev.ps1 test
 ```
+
+## Retomar o ambiente local já configurado
+
+Com o Docker Desktop aberto, execute na raiz do projeto:
+
+```powershell
+docker compose up -d
+```
+
+Em outro terminal, inicie o frontend:
+
+```powershell
+cd frontend
+npm.cmd run dev -- --host 127.0.0.1
+```
+
+Acesse `http://127.0.0.1:5173/login`. Para criar as contas de demonstração no ambiente local:
+
+```powershell
+docker compose exec -T backend php artisan db:seed --class=LocalDevelopmentSeeder
+```
+
+| Papel | E-mail | Senha | Tenant |
+|-------|--------|-------|--------|
+| Administrador do tenant | `admin@formengine.local` | `FormEngineLocal123!` | `demo` |
+| Administrador do sistema | `admin-sistema@formengine.local` | `FormEngineLocal123!` | `demo` |
+
+O seeder só executa com `APP_ENV=local` e preserva contas existentes. O administrador do tenant gerencia formulários, usuários, submissões e auditoria; o administrador do sistema gerencia tenants.
+
+Para parar o frontend, pressione `Ctrl+C` no terminal. Para parar os serviços Docker, execute `docker compose stop`.
 
 ## 🧪 Testes
 
