@@ -145,5 +145,5 @@ Ao atualizar a documentação:
 
 ---
 
-**Última atualização:** 2026-04-06
-**Versão do Projeto:** 1.0 (Fases 1 e 2 - Backend Completo)
+**Última atualização:** 2026-10-10
+**Versão do Projeto:** 1.0 em estabilização — camadas do backend consolidadas; pendências funcionais descritas em [arquitetura.md](arquitetura.md#18-consolidação-das-camadas--2026-10-10).

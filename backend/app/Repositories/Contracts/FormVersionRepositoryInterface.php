@@ -16,4 +16,6 @@ interface FormVersionRepositoryInterface
     public function listPublishedByForm(int $formId): Collection;
 
     public function findLatestPublishedByForm(int $formId): ?FormVersion;
+
+    public function publish(FormVersion $version): FormVersion;
 }

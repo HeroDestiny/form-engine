@@ -50,4 +50,11 @@ class FormVersionRepository implements FormVersionRepositoryInterface
             ->with('fields')
             ->first();
     }
+
+    public function publish(FormVersion $version): FormVersion
+    {
+        $version->update(['is_published' => true, 'published_at' => now()]);
+
+        return $version->fresh(['fields' => fn ($query) => $query->orderBy('order')]);
+    }
 }

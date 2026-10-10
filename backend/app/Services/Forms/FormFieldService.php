@@ -2,12 +2,13 @@
 
 namespace App\Services\Forms;
 
+use App\Exceptions\BusinessException;
+use App\Exceptions\NotFoundException;
 use App\Models\FormField;
 use App\Models\FormVersion;
 use App\Repositories\Contracts\FormFieldRepositoryInterface;
 use App\Repositories\Contracts\FormVersionRepositoryInterface;
 use Illuminate\Support\Collection;
-use Illuminate\Validation\Rule;
 
 class FormFieldService
 {
@@ -18,6 +19,8 @@ class FormFieldService
 
     public function listForVersionInTenant(int $tenantId, int $formId, int $versionId): Collection
     {
+        $this->requireVersion($tenantId, $formId, $versionId);
+
         return $this->formFieldRepository->listForVersionInTenant($tenantId, $formId, $versionId);
     }
 
@@ -31,48 +34,10 @@ class FormFieldService
         return $this->formFieldRepository->findInTenant($tenantId, $formId, $versionId, $fieldId);
     }
 
-    public function storeRules(int $versionId): array
-    {
-        return [
-            'label' => ['required', 'string', 'min:2', 'max:255'],
-            'name' => [
-                'required',
-                'string',
-                'regex:/^[a-z0-9_]+$/',
-                Rule::unique('form_fields', 'name')->where(static fn ($query) => $query->where('form_version_id', $versionId)),
-            ],
-            'type' => ['required', Rule::in(['text', 'textarea', 'number', 'email', 'date', 'select', 'radio', 'checkbox'])],
-            'is_required' => ['required', 'boolean'],
-            'order' => ['required', 'integer', 'min:1'],
-            'options' => ['required_if:type,select,radio,checkbox', 'array'],
-            'options.*.value' => ['required_with:options', 'string'],
-            'options.*.label' => ['required_with:options', 'string'],
-        ];
-    }
-
-    public function updateRules(int $versionId, int $fieldId): array
-    {
-        return [
-            'label' => ['required', 'string', 'min:2', 'max:255'],
-            'name' => [
-                'required',
-                'string',
-                'regex:/^[a-z0-9_]+$/',
-                Rule::unique('form_fields', 'name')
-                    ->where(static fn ($query) => $query->where('form_version_id', $versionId))
-                    ->ignore($fieldId),
-            ],
-            'type' => ['required', Rule::in(['text', 'textarea', 'number', 'email', 'date', 'select', 'radio', 'checkbox'])],
-            'is_required' => ['required', 'boolean'],
-            'order' => ['required', 'integer', 'min:1'],
-            'options' => ['required_if:type,select,radio,checkbox', 'array'],
-            'options.*.value' => ['required_with:options', 'string'],
-            'options.*.label' => ['required_with:options', 'string'],
-        ];
-    }
-
     public function create(FormVersion $version, array $payload): FormField
     {
+        $this->ensureEditable($version);
+
         return $this->formFieldRepository->create([
             'form_version_id' => $version->id,
             'label' => $payload['label'],
@@ -86,6 +51,8 @@ class FormFieldService
 
     public function update(FormField $field, array $payload): FormField
     {
+        $this->ensureEditable($field->version);
+
         return $this->formFieldRepository->update($field, [
             'label' => $payload['label'],
             'name' => $payload['name'],
@@ -98,6 +65,26 @@ class FormFieldService
 
     public function delete(FormField $field): void
     {
+        if ($field->version->is_published) {
+            throw new BusinessException('Campos de versões publicadas não podem ser removidos', 'field_removal_forbidden');
+        }
         $this->formFieldRepository->delete($field);
+    }
+
+    public function requireVersion(int $tenantId, int $formId, int $versionId): FormVersion
+    {
+        return $this->formVersionRepository->findInTenant($tenantId, $formId, $versionId) ?? throw new NotFoundException;
+    }
+
+    public function requireField(int $tenantId, int $formId, int $versionId, int $fieldId): FormField
+    {
+        return $this->formFieldRepository->findInTenant($tenantId, $formId, $versionId, $fieldId) ?? throw new NotFoundException('Campo não encontrado');
+    }
+
+    public function ensureEditable(FormVersion $version): void
+    {
+        if ($version->is_published) {
+            throw new BusinessException('Versão não pode ser editada');
+        }
     }
 }

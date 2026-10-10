@@ -32,7 +32,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::get('/submissions', [SubmissionController::class, 'index']);
     Route::get('/submissions/{submissionId}', [SubmissionController::class, 'show']);
-    Route::post('/submissions/export', [SubmissionController::class, 'export']);
+    Route::post('/submissions/export', [SubmissionController::class, 'export'])->middleware('role:manager,admin');
 
     Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware('role:admin');
     Route::get('/audit-logs/{logId}', [AuditLogController::class, 'show'])->middleware('role:admin');

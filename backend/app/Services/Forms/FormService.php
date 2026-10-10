@@ -3,9 +3,9 @@
 namespace App\Services\Forms;
 
 use App\Models\Form;
+use App\Models\User;
 use App\Repositories\Contracts\FormRepositoryInterface;
 use App\Repositories\Contracts\FormVersionRepositoryInterface;
-use App\Models\FormVersion;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -42,6 +42,15 @@ class FormService
                 ];
             })
             ->values();
+    }
+
+    public function listForUser(User $actor, ?string $search = null, string $sort = 'name', string $order = 'asc', string $scope = ''): Collection
+    {
+        if ($scope === 'all' && in_array($actor->role, ['manager', 'admin'], true)) {
+            return $this->listAllForTenant((int) $actor->tenant_id, $search, $sort, $order);
+        }
+
+        return $this->listAvailableForTenant((int) $actor->tenant_id, $search, $sort, $order);
     }
 
     public function listAllForTenant(int $tenantId, ?string $search = null, string $sort = 'name', string $order = 'asc'): Collection

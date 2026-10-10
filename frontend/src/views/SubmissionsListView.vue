@@ -1,7 +1,12 @@
 <script setup>
 import { onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { listSubmissions, exportSubmissionsCsv } from '../api'
+import {
+  exportSubmissionsCsv,
+  getCurrentUser,
+  listAllForms,
+  listSubmissions,
+} from '../api'
 
 const router = useRouter()
 
@@ -11,6 +16,10 @@ const state = reactive({
   submissions: [],
   pagination: null,
   exporting: false,
+  canExport: false,
+  exportForms: [],
+  selectedExportFormId: '',
+  exportError: '',
 })
 
 async function loadSubmissions() {
@@ -28,19 +37,46 @@ async function loadSubmissions() {
   }
 }
 
-async function handleExport() {
-  state.exporting = true
-  state.error = ''
+async function loadExportContext() {
+  state.exportError = ''
+
   try {
-    // exporta todas as submissões do tenant; backend exige form_id, então usamos o primeiro da lista como atalho
-    const first = state.submissions[0]
-    if (!first) {
-      state.error = 'Não há submissões para exportar.'
+    const me = await getCurrentUser()
+    const role = me?.data?.user?.role
+
+    state.canExport = ['manager', 'admin'].includes(role)
+
+    if (!state.canExport) {
       return
     }
-    await exportSubmissionsCsv({ form_id: first.form.id })
+
+    const data = await listAllForms()
+    state.exportForms = data?.data?.forms ?? []
+
+    if (state.exportForms.length === 1) {
+      state.selectedExportFormId = String(state.exportForms[0].id)
+    }
   } catch (error) {
-    state.error = error?.body?.message || 'Erro ao exportar submissões.'
+    state.exportError = error?.body?.message || 'Erro ao carregar opções de exportação.'
+  }
+}
+
+async function handleExport() {
+  state.exportError = ''
+
+  if (!state.selectedExportFormId) {
+    state.exportError = 'Selecione o formulário que deseja exportar.'
+    return
+  }
+
+  state.exporting = true
+
+  try {
+    await exportSubmissionsCsv({
+      form_id: Number(state.selectedExportFormId),
+    })
+  } catch (error) {
+    state.exportError = error?.body?.message || 'Erro ao exportar submissões.'
   } finally {
     state.exporting = false
   }
@@ -48,6 +84,7 @@ async function handleExport() {
 
 onMounted(() => {
   loadSubmissions()
+  loadExportContext()
 })
 </script>
 
@@ -72,13 +109,32 @@ onMounted(() => {
             <h2>Submissões</h2>
             <p class="panel-subtitle">Lista de submissões do tenant (apenas suas, se papel = user).</p>
           </div>
-          <button class="ghost-button" type="button" :disabled="state.exporting" @click="handleExport">
-            <span v-if="!state.exporting">Exportar CSV</span>
-            <span v-else>Exportando…</span>
-          </button>
+
+          <div v-if="state.canExport" class="panel-actions">
+            <label class="field">
+              <span>Formulário para exportação</span>
+              <select v-model="state.selectedExportFormId">
+                <option value="">Selecione um formulário…</option>
+                <option v-for="form in state.exportForms" :key="form.id" :value="String(form.id)">
+                  {{ form.name }}
+                </option>
+              </select>
+            </label>
+
+            <button
+              class="ghost-button"
+              type="button"
+              :disabled="state.exporting || !state.selectedExportFormId"
+              @click="handleExport"
+            >
+              <span v-if="!state.exporting">Exportar CSV</span>
+              <span v-else>Exportando…</span>
+            </button>
+          </div>
         </div>
 
         <p v-if="state.error" class="feedback error">{{ state.error }}</p>
+        <p v-if="state.exportError" class="feedback error">{{ state.exportError }}</p>
         <p v-if="state.loading" class="panel-subtitle">Carregando submissões…</p>
 
         <div v-if="!state.loading && !state.submissions.length" class="empty-state">

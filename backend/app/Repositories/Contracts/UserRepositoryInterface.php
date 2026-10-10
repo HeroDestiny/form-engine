@@ -17,4 +17,10 @@ interface UserRepositoryInterface
     public function findInTenant(int $tenantId, int $userId): ?User;
 
     public function updateStatus(User $user, bool $isActive): User;
+
+    public function findForLogin(string $email, ?string $tenantSlug): Collection;
+
+    public function issueToken(User $user): string;
+
+    public function revokeCurrentToken(User $user): void;
 }

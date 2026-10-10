@@ -44,4 +44,23 @@ class UserRepository implements UserRepositoryInterface
 
         return $user->fresh();
     }
+
+    public function findForLogin(string $email, ?string $tenantSlug): Collection
+    {
+        return User::query()
+            ->with('tenant')
+            ->where('email', $email)
+            ->when($tenantSlug, fn ($query) => $query->whereHas('tenant', fn ($tenantQuery) => $tenantQuery->where('slug', $tenantSlug)))
+            ->get();
+    }
+
+    public function issueToken(User $user): string
+    {
+        return $user->createToken('auth-token')->plainTextToken;
+    }
+
+    public function revokeCurrentToken(User $user): void
+    {
+        $user->currentAccessToken()?->delete();
+    }
 }

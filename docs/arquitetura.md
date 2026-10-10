@@ -355,3 +355,26 @@ A arquitetura será considerada adequada quando:
 * Repositories abstraírem persistência
 * Testes garantirem comportamento
 * Código for explicável em poucos minutos
+
+---
+
+# 18. Consolidação das Camadas — 2026-10-10
+
+Os controllers da API delegam consultas e persistência a Services e Repositories. As entradas dos fluxos de escrita são validadas por Form Requests, e a autorização por papel permanece nos middlewares das rotas.
+
+Responsabilidades consolidadas:
+
+* `AuthService`: seleção da conta, verificação de credenciais e condições de acesso; `UserRepository` executa consultas e operações com tokens.
+* `FormVersionService`: decisão de criar nova versão e publicar; `FormVersionRepository` realiza persistência.
+* `FormFieldService`: proteção de versões publicadas; `FormFieldRequest` valida os atributos dos campos.
+* `SubmissionService`: contexto de preenchimento, acesso às submissões e coordenação dos repositórios; `SubmissionCsvService` gera o conteúdo da exportação, e o controller realiza o download HTTP.
+* `FormSubmissionRepository`: consultas por tenant, filtros, paginação e carregamento antecipado dos autores para evitar consultas por registro.
+* `BusinessException` e `NotFoundException`: erros esperados do domínio; `bootstrap/app.php` converte esses erros e `ValidationException` para o envelope JSON da API e os códigos HTTP existentes.
+
+Nos fluxos de campos e preenchimento, os Form Requests resolvem o contexto por meio dos Services antes de validar o payload. Isso preserva a resposta 404 para recursos de outro tenant, inclusive quando a entrada é inválida. Um rascunho sem versão publicada é recusado com 422, sem tentar persistir uma referência inválida.
+
+A suíte possui 75 testes, incluindo regressões para isolamento antes da validação e payloads de submissão inválidos. As rotas e os formatos de sucesso existentes foram preservados.
+
+O `phpunit.xml` força as variáveis de teste em `env` e `server`, inclusive SQLite em memória, para impedir que a configuração PostgreSQL do Docker prevaleça pela precedência de `$_SERVER`. `tests/TestCase.php` verifica o ambiente e a conexão antes de executar as migrations dos testes e interrompe a suíte se o isolamento não estiver correto.
+
+Pendências funcionais identificadas na revisão seguem separadas desta consolidação: geração automática de auditoria, validação completa de e-mail e checkbox, evolução do ciclo de rascunhos, bloqueio de tokens de tenants desativados e ajustes na exportação CSV. O isolamento atual utiliza filtros explícitos nos Repositories; os escopos globais descritos na estratégia original ainda não foram adotados.
