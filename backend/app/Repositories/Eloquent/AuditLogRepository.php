@@ -3,6 +3,11 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\AuditLog;
+use App\Models\Form;
+use App\Models\FormSubmission;
+use App\Models\FormVersion;
+use App\Models\Tenant;
+use App\Models\User;
 use App\Repositories\Contracts\AuditLogRepositoryInterface;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -59,5 +64,45 @@ class AuditLogRepository implements AuditLogRepositoryInterface
             ->where('tenant_id', $tenantId)
             ->where('id', $logId)
             ->first();
+    }
+
+    public function entityExists(AuditLog $log): bool
+    {
+        if (! $log->entity_type || ! $log->entity_id) {
+            return false;
+        }
+
+        $modelClass = $this->resolveEntityModelClass($log->entity_type);
+        if (! $modelClass) {
+            return false;
+        }
+
+        return $modelClass::query()->where('id', $log->entity_id)->exists();
+    }
+
+    public function relatedActionsCount(AuditLog $log): int
+    {
+        if (! $log->entity_type || ! $log->entity_id || ! $log->tenant_id) {
+            return 0;
+        }
+
+        return AuditLog::query()
+            ->where('tenant_id', $log->tenant_id)
+            ->where('entity_type', $log->entity_type)
+            ->where('entity_id', $log->entity_id)
+            ->where('id', '!=', $log->id)
+            ->count();
+    }
+
+    private function resolveEntityModelClass(string $entityType): ?string
+    {
+        return match ($entityType) {
+            'tenant' => Tenant::class,
+            'user' => User::class,
+            'form' => Form::class,
+            'form_version' => FormVersion::class,
+            'form_submission' => FormSubmission::class,
+            default => null,
+        };
     }
 }

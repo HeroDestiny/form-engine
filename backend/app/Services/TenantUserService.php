@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Exceptions\BusinessException;
+use App\Exceptions\NotFoundException;
 use App\Models\User;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -46,5 +48,18 @@ class TenantUserService
     public function toApiPayload(User $user): array
     {
         return $user->only(['id', 'tenant_id', 'name', 'email', 'role', 'is_active', 'created_at', 'updated_at']);
+    }
+
+    public function changeStatus(int $tenantId, int $userId, int $actorId, bool $isActive): User
+    {
+        if ($actorId === $userId && ! $isActive) {
+            throw new BusinessException('Você não pode desativar sua própria conta', 'forbidden');
+        }
+        $user = $this->userRepository->findInTenant($tenantId, $userId);
+        if (! $user) {
+            throw new NotFoundException('Usuário não encontrado');
+        }
+
+        return $this->userRepository->updateStatus($user, $isActive);
     }
 }

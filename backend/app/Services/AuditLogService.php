@@ -25,4 +25,14 @@ class AuditLogService
     {
         return $this->auditLogRepository->findInTenant($tenantId, $logId);
     }
+
+    public function entityExists(AuditLog $log): bool
+    {
+        return $this->auditLogRepository->entityExists($log);
+    }
+
+    public function relatedActionsCount(AuditLog $log): int
+    {
+        return $this->auditLogRepository->relatedActionsCount($log);
+    }
 }

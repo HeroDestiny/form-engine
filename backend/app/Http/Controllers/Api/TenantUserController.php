@@ -3,11 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreTenantUserRequest;
+use App\Http\Requests\UpdateStatusRequest;
 use App\Services\TenantUserService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 
 class TenantUserController extends Controller
 {
@@ -36,28 +35,8 @@ class TenantUserController extends Controller
         ]);
     }
 
-    public function store(Request $request, int $tenantId): JsonResponse
+    public function store(StoreTenantUserRequest $request, int $tenantId): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'name' => ['required', 'string', 'min:3', 'max:255'],
-            'email' => [
-                'required',
-                'email',
-                Rule::unique('users', 'email')->where(static fn ($query) => $query->where('tenant_id', $tenantId)),
-            ],
-            'password' => ['required', 'string', 'min:8'],
-            'role' => ['required', Rule::in(['admin', 'manager', 'user'])],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'data' => null,
-                'message' => 'Erro de validação',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
         $user = $this->tenantUserService->create(
             $tenantId,
             $request->string('name')->toString(),
@@ -74,44 +53,9 @@ class TenantUserController extends Controller
         ], 201);
     }
 
-    public function updateStatus(Request $request, int $tenantId, int $userId): JsonResponse
+    public function updateStatus(UpdateStatusRequest $request, int $tenantId, int $userId): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'is_active' => ['required', 'boolean'],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'data' => null,
-                'message' => 'Erro de validação',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $authUser = $request->user();
-
-        if ((int) $authUser?->id === $userId && ! $request->boolean('is_active')) {
-            return response()->json([
-                'success' => false,
-                'data' => null,
-                'message' => 'Você não pode desativar sua própria conta',
-                'errors' => null,
-            ], 403);
-        }
-
-        $targetUser = $this->tenantUserService->findInTenant($tenantId, $userId);
-
-        if (! $targetUser) {
-            return response()->json([
-                'success' => false,
-                'data' => null,
-                'message' => 'Usuário não encontrado',
-                'errors' => null,
-            ], 404);
-        }
-
-        $targetUser = $this->tenantUserService->updateStatus($targetUser, (bool) $request->boolean('is_active'));
+        $targetUser = $this->tenantUserService->changeStatus($tenantId, $userId, (int) $request->user()->id, $request->boolean('is_active'));
 
         return response()->json([
             'success' => true,

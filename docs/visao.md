@@ -157,4 +157,4 @@ O projeto será considerado bem-sucedido quando:
 
 ## 12. Estado Atual
 
-✅ **Fases 1 e 2 completas** — Backend com multi-tenant funcional, versionamento de formulários, auditoria e exportação CSV implementados; frontend SPA ainda não iniciado
+**v1 em estabilização** — Backend e frontend SPA funcionais. As camadas Controller → Service → Repository e a validação via Form Requests foram consolidadas. Existem fluxos de multi-tenant, versionamento, preenchimento, consulta e exportação CSV, além da consulta de auditoria. A geração automática de auditoria e as demais pendências funcionais estão descritas no estado de implementação em `arquitetura.md`.

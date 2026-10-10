@@ -6,7 +6,7 @@ FROM composer:${COMPOSER_VERSION} AS composer
 
 # Imagem base - FPM para uso com Nginx
 # Usando PHP 8.5
-FROM php:8.5-fpm-alpine3.19
+FROM php:8.5-fpm-alpine
 
 # Labels de metadata
 LABEL maintainer="form-engine-team"
@@ -41,7 +41,7 @@ RUN apk add --no-cache \
     $PHPIZE_DEPS \
     && \
     # Instalar extensões PHP
-    docker-php-ext-install \
+    docker-php-ext-install -j2 \
     pdo \
     pdo_pgsql \
     pgsql \
@@ -51,10 +51,9 @@ RUN apk add --no-cache \
     pcntl \
     bcmath \
     intl \
-    opcache \
     && \
     # Instalar Redis extension (versão fixada)
-    pecl install redis-6.0.2 \
+    pecl install redis-6.3.0 \
     && docker-php-ext-enable redis \
     && \
     # Limpar dependências de build
