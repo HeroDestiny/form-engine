@@ -1,0 +1,27 @@
+services:
+  postgres-test:
+    image: postgres:17.2-alpine
+    environment:
+      POSTGRES_DB: form_engine_testing
+      POSTGRES_USER: form_engine_testing
+      POSTGRES_PASSWORD: testing_only
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U form_engine_testing -d form_engine_testing"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  backend-tests:
+    image: form-engine-backend
+    working_dir: /var/www
+    volumes:
+      - ./backend:/var/www
+    environment:
+      APP_KEY: ${APP_KEY}
+      APP_ENV: testing
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    command: ["php", "vendor/bin/phpunit", "--configuration=phpunit.postgres.xml"]

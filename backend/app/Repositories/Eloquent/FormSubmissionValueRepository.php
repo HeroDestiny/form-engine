@@ -11,4 +11,9 @@ class FormSubmissionValueRepository implements FormSubmissionValueRepositoryInte
     {
         return FormSubmissionValue::query()->create($data);
     }
+
+    public function deleteForSubmission(int $submissionId): void
+    {
+        FormSubmissionValue::query()->where('form_submission_id', $submissionId)->delete();
+    }
 }

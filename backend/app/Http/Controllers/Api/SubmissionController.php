@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ExportSubmissionsRequest;
+use App\Http\Requests\FinalizeDraftRequest;
 use App\Http\Requests\SaveDraftRequest;
 use App\Http\Requests\SubmitFormRequest;
+use App\Http\Requests\UpdateDraftRequest;
 use App\Services\Forms\SubmissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -121,5 +123,19 @@ class SubmissionController extends Controller
             'message' => 'Rascunho salvo com sucesso. Você pode continuar depois.',
             'errors' => null,
         ], 201);
+    }
+
+    public function updateDraft(UpdateDraftRequest $request, int $formId, int $submissionId): JsonResponse
+    {
+        $draft = $this->submissionService->saveExistingDraft($request->user(), $formId, $submissionId, $request->values());
+
+        return response()->json(['success' => true, 'data' => ['draft' => $draft], 'message' => 'Rascunho atualizado com sucesso', 'errors' => null]);
+    }
+
+    public function finalizeDraft(FinalizeDraftRequest $request, int $formId, int $submissionId): JsonResponse
+    {
+        $submission = $this->submissionService->saveExistingDraft($request->user(), $formId, $submissionId, $request->values(), true);
+
+        return response()->json(['success' => true, 'data' => ['submission' => $submission], 'message' => 'Formulário enviado com sucesso!', 'errors' => null]);
     }
 }

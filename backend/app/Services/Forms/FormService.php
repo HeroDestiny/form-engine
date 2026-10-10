@@ -6,6 +6,7 @@ use App\Models\Form;
 use App\Models\User;
 use App\Repositories\Contracts\FormRepositoryInterface;
 use App\Repositories\Contracts\FormVersionRepositoryInterface;
+use App\Services\AuditRecorder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -14,6 +15,7 @@ class FormService
     public function __construct(
         private readonly FormRepositoryInterface $formRepository,
         private readonly FormVersionRepositoryInterface $formVersionRepository,
+        private readonly AuditRecorder $audit,
     ) {}
 
     public function listAvailableForTenant(int $tenantId, ?string $search = null, string $sort = 'name', string $order = 'asc'): Collection
@@ -127,10 +129,9 @@ class FormService
                 'created_by' => $createdBy,
             ]);
 
-            return [
-                'form' => $form,
-                'version' => $version,
-            ];
+            $this->audit->record('CREATE_FORM', $tenantId, 'form', $form->id, ['version_id' => $version->id], $createdBy);
+
+            return ['form' => $form, 'version' => $version];
         });
     }
 
@@ -141,6 +142,11 @@ class FormService
 
     public function updateStatus(Form $form, bool $isActive): Form
     {
-        return $this->formRepository->updateStatus($form, $isActive);
+        return DB::transaction(function () use ($form, $isActive) {
+            $updated = $this->formRepository->updateStatus($form, $isActive);
+            $this->audit->record('UPDATE_FORM', $form->tenant_id, 'form', $form->id, ['is_active' => $isActive]);
+
+            return $updated;
+        });
     }
 }

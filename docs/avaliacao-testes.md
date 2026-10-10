@@ -2,6 +2,8 @@
 
 Data: 10/10/2026.
 
+Este relatório registra a avaliação inicial de 75 testes. A seção “Evolução após a avaliação”, ao final, indica as lacunas já corrigidas; a matriz inicial permanece como referência do diagnóstico.
+
 ## Parecer
 
 Os testes contemplam parcialmente o comportamento esperado. Existem testes associados aos 21 casos de uso, mas isso não significa que todas as regras, alternativas e verificações obrigatórias desses casos estejam cobertas. A suíte protege os fluxos básicos e alguns controles de acesso; ainda não serve como comprovação completa de aceitação da v1.
@@ -96,3 +98,23 @@ Não é necessário criar testes unitários para cada método apenas para aument
 Esta avaliação cobre o backend. Não certifica os comportamentos de interface descritos nos casos de uso. Rate limiting está marcado como futuro no UC20; expiração automática de rascunhos está explicitamente fora da v1 no UC14. Esses itens não foram tratados como bloqueadores da aceitação atual.
 
 Não foram alterados testes nem funcionalidades durante esta avaliação. As limitações de implementação acima foram identificadas por leitura do código, sem adicionar ou executar cenários novos para reproduzi-las. Os 75 testes existentes passaram; esse resultado garante apenas os cenários e assertions que a suíte contém.
+
+## Evolução após a avaliação — acesso e campos dinâmicos
+
+A consolidação seguinte adicionou 19 cenários e corrigiu as falhas reproduzidas pelos novos testes. A suíte passou com **94 testes e 392 assertions**, em SQLite em memória. O build do frontend também passou.
+
+- Tokens existentes recebem 403 nas APIs de dados e em `/api/auth/me` enquanto o tenant estiver desativado. A reativação restabelece o acesso, preservando o token e os dados. Logout permanece disponível para revogar o token mesmo com tenant inativo.
+- Há testes de token inválido, token com `expires_at` vencido e reutilização após logout. A política de duração padrão dos tokens continua pendente; `sanctum.expiration` permanece nulo.
+- E-mail inválido é recusado tanto no envio final quanto no rascunho. Checkbox exige uma lista de strings com opções existentes, incluindo rejeição de valores escalares, objetos, opções desconhecidas e arrays aninhados.
+- Checkbox é armazenado como JSON em coluna de texto e recuperado como array nos detalhes. O frontend envia arrays; valores legados separados por vírgula continuam legíveis. A exportação apresenta os labels das escolhas separados por ponto e vírgula.
+- Os oito tipos de campo têm um cenário de envio e leitura dos valores persistidos. Campos opcionais vazios são aceitos, e rascunhos podem omitir campos obrigatórios.
+
+As pendências de auditoria automática, ciclo completo de rascunhos, histórico de versões, filtros/paginação, formatação geral do CSV e integração com PostgreSQL continuam abertas. Esta etapa não certifica todos os requisitos da v1.
+
+## Evolução seguinte — auditoria, drafts, histórico, CSV e PostgreSQL
+
+Auditoria automática e imutabilidade no banco foram implementadas, incluindo testes de identidade/contexto e rollback quando a gravação falha. A suíte cobre atualização e conversão do mesmo draft, isolamento do proprietário, preservação da versão original após nova publicação, cópia de opções/ordem e leitura histórica após edição/exclusão na versão seguinte.
+
+O CSV é interpretado nos testes para comparar headers/células com vírgulas, aspas e quebras de linha, múltiplas versões, filtros, BOM e separador. O índice de draft único e o perfil PostgreSQL exclusivo foram adicionados. O teste de bloqueio entre duas conexões é executado apenas no PostgreSQL.
+
+Consulte [a consolidação funcional](consolidacao-backend.md) para os contratos e pendências atuais. A matriz no início continua sendo o diagnóstico anterior às correções. Ainda faltam a matriz completa de permissões, cobertura adicional de filtros/paginação, limites de entradas/exportação e definição da política de expiração; não há certificado de aceitação integral da v1 baseado apenas na contagem de testes.

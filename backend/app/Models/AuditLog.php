@@ -10,6 +10,12 @@ class AuditLog extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::updating(fn () => throw new \LogicException('Logs de auditoria são imutáveis.'));
+        static::deleting(fn () => throw new \LogicException('Logs de auditoria são imutáveis.'));
+    }
+
     protected $fillable = [
         'tenant_id',
         'user_id',

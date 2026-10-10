@@ -304,6 +304,8 @@ form-engine/
 
 ## 🔐 Segurança
 
+Os contratos de auditoria, rascunhos, versionamento e exportação, assim como os comandos dos testes isolados em SQLite e PostgreSQL, estão em [Consolidação funcional do backend](docs/consolidacao-backend.md).
+
 O backend aplica isolamento por tenant e autorização por papel nos endpoints protegidos. Recursos pertencentes a outro tenant são tratados como não encontrados nos fluxos protegidos correspondentes.
 
 Para produção, ainda é recomendável revisar a estratégia de armazenamento do token no frontend, hardening de exportações CSV e configurações específicas do ambiente de deploy.

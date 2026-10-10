@@ -590,7 +590,13 @@ Visualiza detalhes do log.
 - `date`: Data
 - `select`: Seleção única (requer options)
 - `radio`: Opções radio (requer options)
-- `checkbox`: Múltipla escolha (requer options)
+- `checkbox`: Múltipla escolha (requer options). Envie um array de strings com os valores das opções, por exemplo `["opt1", "opt2"]`. O armazenamento utiliza JSON em texto; os detalhes da submissão retornam um array, e o CSV apresenta os labels das escolhas.
+
+### Atualização dos fluxos — 10/10/2026
+
+Criação de submissão/draft aceita `version_id` opcional para fixar a versão publicada exibida ao usuário. Sem esse campo, usa a última versão publicada. Rascunhos existentes podem ser editados com `PATCH /api/forms/{formId}/drafts/{submissionId}` e finalizados com `POST /api/forms/{formId}/drafts/{submissionId}/submit`. Ambos recebem `{"values": {...}}`; edição substitui todas as respostas, e finalização valida os obrigatórios da versão original. Apenas o proprietário pode escrever.
+
+Exportação aceita `separator` como vírgula ou ponto e vírgula. Auditoria é gerada automaticamente nos fluxos e protegida contra alteração/exclusão. Consulte [os contratos e a validação da consolidação](../consolidacao-backend.md).
 
 ---
 

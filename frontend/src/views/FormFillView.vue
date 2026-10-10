@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getForm, listFormVersions, listFields, submitForm, saveDraft, listDrafts, getSubmission } from '../api'
+import { getForm, listFormVersions, listFields, submitForm, saveDraft, listDrafts, getSubmission, updateDraft, finalizeDraft } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +22,7 @@ const state = reactive({
   loadingDrafts: false,
   loadingDraftValues: false,
   selectedDraftId: null,
+  activeDraftId: null,
 })
 
 const formValues = reactive({})
@@ -114,7 +115,13 @@ function applyDraftValues(values) {
 }
 
 async function handleLoadDraft(draftId) {
-  if (!draftId) return
+  state.activeDraftId = null
+  if (!draftId) {
+    Object.keys(formValues).forEach((key) => delete formValues[key])
+    Object.keys(checkboxValues).forEach((key) => delete checkboxValues[key])
+    await loadData()
+    return
+  }
 
   state.loadingDraftValues = true
   state.error = ''
@@ -122,6 +129,9 @@ async function handleLoadDraft(draftId) {
 
   try {
     const data = await getSubmission(draftId)
+    state.version = data.data.version
+    const fieldsData = await listFields(formId.value, state.version.id)
+    state.fields = (fieldsData?.data?.fields ?? []).slice().sort((a, b) => a.order - b.order)
     const valuesArray = data?.data?.values ?? []
 
     const valuesObject = {}
@@ -134,6 +144,7 @@ async function handleLoadDraft(draftId) {
     }
 
     applyDraftValues(valuesObject)
+    state.activeDraftId = draftId
     state.message = data?.message || 'Rascunho carregado. Você pode continuar o preenchimento.'
   } catch (error) {
     state.error = error?.body?.message || 'Erro ao carregar rascunho.'
@@ -149,7 +160,7 @@ function buildPayloadValues() {
     if (field.type === 'checkbox') {
       const arr = checkboxValues[field.name] || []
       if (arr.length) {
-        payload[field.name] = arr.join(',')
+        payload[field.name] = [...arr]
       }
     } else if (formValues[field.name] !== undefined && formValues[field.name] !== '') {
       payload[field.name] = formValues[field.name]
@@ -166,7 +177,12 @@ async function handleSubmit() {
 
   try {
     const values = buildPayloadValues()
-    const data = await submitForm(formId.value, values)
+    const data = state.activeDraftId
+      ? await finalizeDraft(formId.value, state.activeDraftId, values)
+      : await submitForm(formId.value, values, state.version.id)
+    state.activeDraftId = null
+    state.selectedDraftId = null
+    await loadDrafts()
     state.message = data?.message || 'Formulário enviado com sucesso.'
   } catch (error) {
     if (error.status === 422 && error.body?.errors) {
@@ -187,7 +203,11 @@ async function handleSaveDraft() {
 
   try {
     const values = buildPayloadValues()
-    const data = await saveDraft(formId.value, values)
+    const data = state.activeDraftId
+      ? await updateDraft(formId.value, state.activeDraftId, values)
+      : await saveDraft(formId.value, values, state.version.id)
+    state.activeDraftId = data.data.draft.id
+    state.selectedDraftId = data.data.draft.id
     state.message = data?.message || 'Rascunho salvo com sucesso.'
     await loadDrafts()
   } catch (error) {
