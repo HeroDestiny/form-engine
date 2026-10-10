@@ -120,7 +120,7 @@ class SubmissionService
 
     public function listForUser(User $actor, array $filters, int $perPage): LengthAwarePaginator
     {
-        if (! in_array($actor->role, ['manager', 'admin'], true)) {
+        if (! in_array($actor->role, ['manager', 'admin', 'admin-sistema'], true)) {
             unset($filters['user_id']);
         }
         $paginator = $this->formSubmissionRepository->paginateForTenant(
@@ -160,6 +160,10 @@ class SubmissionService
 
     public function listDrafts(User $actor, int $formId): Collection
     {
+        if (! $this->formRepository->findInTenant((int) $actor->tenant_id, $formId)) {
+            throw new NotFoundException;
+        }
+
         return $this->formSubmissionRepository->listDrafts((int) $actor->tenant_id, (int) $actor->id, $formId);
     }
 
@@ -255,9 +259,6 @@ class SubmissionService
     {
         $form = $this->formRepository->findInTenant($tenantId, $formId);
         if (! $form) {
-            if ($partial) {
-                throw new BusinessException('Este formulário não está mais disponível');
-            }
             throw new NotFoundException;
         }
         if (! $form->is_active) {
@@ -278,7 +279,7 @@ class SubmissionService
 
     public function exportForUser(User $actor, array $filters): array
     {
-        if (! in_array($actor->role, ['manager', 'admin'], true)) {
+        if (! in_array($actor->role, ['manager', 'admin', 'admin-sistema'], true)) {
             throw new BusinessException('Você não tem permissão para esta ação', 'forbidden');
         }
         $form = $this->formRepository->findInTenant((int) $actor->tenant_id, (int) $filters['form_id']);

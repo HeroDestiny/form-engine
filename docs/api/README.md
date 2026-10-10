@@ -735,24 +735,38 @@ curl -X POST http://localhost:8000/api/submissions/export \
 
 ---
 
+## Validação de consultas e paginação
+
+Listagens paginadas (`/submissions`, `/audit-logs`, `/admin/tenants` e `/tenants/{tenantId}/users`) aceitam `page` de 1 a 2147483647 e `per_page` de 1 a 100 (padrões: 1 e 20). Valores inválidos retornam 422 com os campos em `errors`; não são convertidos silenciosamente. Uma página após a última retorna lista vazia, total preservado e `from`/`to` nulos.
+
+Submissões combinam filtros por formulário, versão, usuário, status e período. IDs devem ser inteiros positivos de 32 bits; IDs inexistentes ou de outro tenant resultam em lista vazia. Datas exigem `YYYY-MM-DD` e incluem o dia inteiro: `submitted_at` para finais e `created_at` para rascunhos. `user_id` não amplia acesso de usuários finais.
+
+Auditoria aceita datas ou timestamps ISO 8601 com segundos e fuso, normalizados para UTC. Data final sem hora inclui todo o dia; timestamp final é exato. Datas finais anteriores à inicial retornam 422. Listagens cronológicas usam ID como desempate, evitando repetição entre páginas com datas iguais.
+
+Formulários aceitam `search` (até 255 caracteres, sem distinção de caixa), `sort=name|created_at`, `order=asc|desc` e `scope=available|all`. O escopo `all` só amplia resultados para manager/admin/admin-sistema. A listagem mantém coleção e total.
+
 ## Rate Limiting
 
-**Limites por IP (padrão Laravel):**
-- Autenticação: 5 tentativas / minuto
-- API geral: 60 requisições / minuto
+O login permite 5 tentativas por minuto por IP e por combinação de e-mail/tenant,
+incluindo sucessos e entradas inválidas. Ambos os limites usam o cache compartilhado
+(Redis no Docker) e são configuráveis por `LOGIN_ATTEMPTS_PER_MINUTE`.
+O bloqueio retorna 429, `Retry-After` em segundos e registra `LOGIN_THROTTLED` sem credenciais.
+Não há limite geral de 60 requisições aplicado nesta etapa.
 
 **Headers de resposta:**
 ```
-X-RateLimit-Limit: 60
-X-RateLimit-Remaining: 59
+X-RateLimit-Limit: 5
+X-RateLimit-Remaining: 0
 X-RateLimit-Reset: 1616425200
+Retry-After: 60
 ```
 
 **Resposta ao exceder:**
 ```json
 {
   "success": false,
-  "message": "Too Many Attempts.",
+  "data": null,
+  "message": "Muitas tentativas. Tente novamente em 60 segundos.",
   "errors": null
 }
 ```

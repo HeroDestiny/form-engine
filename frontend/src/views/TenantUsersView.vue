@@ -35,8 +35,8 @@ async function loadContextAndUsers() {
       return
     }
 
-    if (user.role !== 'admin') {
-      state.error = 'Apenas admin do tenant pode gerenciar usuários.'
+    if (!['admin', 'admin-sistema'].includes(user.role)) {
+      state.error = 'Apenas administradores podem gerenciar usuários do tenant.'
       return
     }
 

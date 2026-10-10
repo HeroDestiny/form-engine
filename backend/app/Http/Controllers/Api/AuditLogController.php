@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ListAuditLogsRequest;
 use App\Models\AuditLog;
 use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
@@ -12,21 +13,12 @@ class AuditLogController extends Controller
 {
     public function __construct(private readonly AuditLogService $auditLogService) {}
 
-    public function index(Request $request): JsonResponse
+    public function index(ListAuditLogsRequest $request): JsonResponse
     {
-        $perPage = max(1, min(100, (int) $request->integer('per_page', 20)));
-
         $paginator = $this->auditLogService->listForTenantPaginated(
             (int) $request->user()?->tenant_id,
-            [
-                'action' => $request->filled('action') ? $request->string('action')->toString() : null,
-                'user_id' => $request->filled('user_id') ? (int) $request->integer('user_id') : null,
-                'entity_type' => $request->filled('entity_type') ? $request->string('entity_type')->toString() : null,
-                'entity_id' => $request->filled('entity_id') ? (int) $request->integer('entity_id') : null,
-                'date_from' => $request->filled('date_from') ? $request->string('date_from')->toString() : null,
-                'date_to' => $request->filled('date_to') ? $request->string('date_to')->toString() : null,
-            ],
-            $perPage,
+            $request->validated(),
+            $request->perPage(),
         );
 
         $logs = collect($paginator->items())->map(function (AuditLog $log) {

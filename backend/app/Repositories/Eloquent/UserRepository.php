@@ -56,7 +56,7 @@ class UserRepository implements UserRepositoryInterface
 
     public function issueToken(User $user): string
     {
-        return $user->createToken('auth-token')->plainTextToken;
+        return $user->createToken('auth-token', ['*'], now()->addMinutes((int) config('sanctum.expiration')))->plainTextToken;
     }
 
     public function revokeCurrentToken(User $user): void

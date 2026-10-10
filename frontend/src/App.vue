@@ -40,7 +40,7 @@ async function loadSession() {
 
 async function loadForms() {
   try {
-    const isManagerOrAdmin = state.user && (state.user.role === 'manager' || state.user.role === 'admin')
+    const isManagerOrAdmin = state.user && (['manager', 'admin', 'admin-sistema'].includes(state.user.role))
     const data = isManagerOrAdmin ? await listAllForms() : await listForms()
     state.forms = data?.data?.forms ?? []
   } catch (error) {
@@ -77,7 +77,7 @@ onMounted(() => {
           <button class="ghost-button" type="button" @click="router.push('/')">Formulários</button>
           <button class="ghost-button" type="button" @click="router.push('/submissions')">Submissões</button>
           <button
-            v-if="state.user.role === 'admin'"
+            v-if="['admin', 'admin-sistema'].includes(state.user.role)"
             class="ghost-button"
             type="button"
             @click="router.push('/admin/users')"
@@ -118,7 +118,7 @@ onMounted(() => {
           <div class="panel-actions">
             <button class="ghost-button" type="button" @click="loadForms">Atualizar</button>
             <button
-              v-if="state.user && (state.user.role === 'manager' || state.user.role === 'admin')"
+              v-if="state.user && (['manager', 'admin', 'admin-sistema'].includes(state.user.role))"
               class="ghost-button"
               type="button"
               @click="router.push('/forms/new')"

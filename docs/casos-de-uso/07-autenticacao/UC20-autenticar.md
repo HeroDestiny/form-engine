@@ -87,14 +87,14 @@ Permite autenticação de usuários no sistema, validando credenciais e gerando 
 3. Sistema registra tentativa no log
 4. Caso de uso é encerrado
 
-### FA04 - Múltiplas tentativas falhas (Futuro)
+### FA04 - Limite de tentativas de login
 
-**Quando:** Passo 6 - 5+ tentativas em curto período
+**Quando:** A partir da sexta requisição de login em um minuto por IP ou por e-mail/tenant (limite configurável). Inclui tentativas bem-sucedidas e dados inválidos.
 
 1. Sistema detecta múltiplas tentativas
 2. Sistema bloqueia temporariamente (rate limiting)
-3. Sistema exibe mensagem: "Muitas tentativas. Tente novamente em X minutos."
-4. Sistema registra bloqueio no log
+3. Sistema retorna 429 com `Retry-After` e mensagem "Muitas tentativas. Tente novamente em X segundos."
+4. Sistema registra `LOGIN_THROTTLED` no log, sem e-mail, senha ou token
 5. Caso de uso é encerrado
 
 ---
@@ -103,9 +103,9 @@ Permite autenticação de usuários no sistema, validando credenciais e gerando 
 
 - **RN01:** Mensagens de erro não revelam se e-mail existe
 - **RN02:** Senhas são verificadas via hash (bcrypt)
-- **RN03:** Token tem tempo de expiração configurável
+- **RN03:** Token expira em 60 minutos por padrão, configurável por `SANCTUM_EXPIRATION` (inteiro em minutos, mínimo 1). A validade é absoluta e não se renova com atividade. Novos tokens persistem `expires_at`; tokens antigos também estão sujeitos ao limite global do Sanctum contado desde `created_at`.
 - **RN04:** Tentativas de login são auditadas (sucesso e falha)
-- **RN05:** Rate limiting para prevenir brute force (futuro)
+- **RN05:** Login limitado por IP e por e-mail/tenant usando cache compartilhado. `LOGIN_ATTEMPTS_PER_MINUTE` define o limite (padrão 5, mínimo 1). A janela é de 60 segundos e volta a permitir login após o prazo informado.
 - **RN06:** IP e user agent são registrados
 - **RN07:** Token é retornado apenas uma vez
 

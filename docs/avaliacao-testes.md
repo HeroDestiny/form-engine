@@ -118,3 +118,15 @@ Auditoria automática e imutabilidade no banco foram implementadas, incluindo te
 O CSV é interpretado nos testes para comparar headers/células com vírgulas, aspas e quebras de linha, múltiplas versões, filtros, BOM e separador. O índice de draft único e o perfil PostgreSQL exclusivo foram adicionados. O teste de bloqueio entre duas conexões é executado apenas no PostgreSQL.
 
 Consulte [a consolidação funcional](consolidacao-backend.md) para os contratos e pendências atuais. A matriz no início continua sendo o diagnóstico anterior às correções. Ainda faltam a matriz completa de permissões, cobertura adicional de filtros/paginação, limites de entradas/exportação e definição da política de expiração; não há certificado de aceitação integral da v1 baseado apenas na contagem de testes.
+
+## Atualização — autenticação e autorização (2026-10-10)
+
+A etapa posterior implementa validade padrão dos tokens, limite de login e herança de permissões de `admin-sistema` dentro do próprio tenant. `AuthenticationPolicyTest` e `RoutePermissionMatrixTest` complementam a cobertura anterior: 30 operações × 4 papéis, tokens ausentes/inválidos/expirados em todas as operações, recusas auditadas, isolamento entre tenants, propriedade dos rascunhos, expiração absoluta, revogação por sessão e recuperação do limite de login. Um teste detecta divergência entre a matriz e as rotas registradas.
+
+A suíte final passa em SQLite: **240 testes aprovados, 1 ignorado, 994 assertions**, e em PostgreSQL: **241 testes aprovados, 996 assertions**. O teste ignorado verifica locks exclusivos do PostgreSQL. A validação em PostgreSQL usa o Compose isolado, sem acesso ao banco de desenvolvimento. Build do frontend e Pint também passam. As lacunas de expiração e matriz citadas nas avaliações históricas acima estão resolvidas nesta etapa; filtros/paginação, limites de entrada/exportação e operação em produção continuam pendentes.
+
+## Atualização — consultas, filtros e paginação (2026-10-10)
+
+`QueryValidationAndPaginationTest` adiciona 107 testes parametrizados e funcionais. A cobertura inclui validação de paginação nas quatro listagens paginadas, IDs e tipos inválidos, datas impossíveis/intervalos invertidos, filtros combinados, fronteiras inclusivas, timestamps com fuso na auditoria, versões, rascunhos, busca de formulários sem distinção de caixa, escopo administrativo, ordenação com desempate por ID, metadados e páginas vazias, isolamento entre tenants e restrição de submissões próprias.
+
+Resultado final: **347 testes aprovados, 1 ignorado e 1608 assertions em SQLite**; **348 testes aprovados e 1610 assertions em PostgreSQL isolado**. Pint passa. A etapa corrige filtros silenciosamente convertidos, datas de rascunhos e limites finais da auditoria. Os contratos estão em [consolidação do backend](consolidacao-backend.md) e no OpenAPI. Permanecem limites de entradas/exportação e validação da operação em produção; não é uma certificação de prontidão completa baseada na contagem de testes.

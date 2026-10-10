@@ -51,7 +51,7 @@ class FormSubmissionRepository implements FormSubmissionRepositoryInterface
         }
         $this->applyDateFilters($query, $filters);
 
-        return $query->orderByDesc('submitted_at')->paginate($perPage);
+        return $query->orderByDesc($status === 'draft' ? 'created_at' : 'submitted_at')->orderByDesc('id')->paginate($perPage);
     }
 
     public function listDrafts(int $tenantId, int $userId, int $formId): Collection
@@ -62,6 +62,7 @@ class FormSubmissionRepository implements FormSubmissionRepositoryInterface
             ->where('submitted_by', $userId)
             ->whereHas('version', fn ($query) => $query->where('form_id', $formId))
             ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->get();
     }
 
@@ -87,16 +88,17 @@ class FormSubmissionRepository implements FormSubmissionRepositoryInterface
         }
         $this->applyDateFilters($query, $filters);
 
-        return $query->orderByDesc('submitted_at')->get();
+        return $query->orderByDesc('submitted_at')->orderByDesc('id')->get();
     }
 
     private function applyDateFilters(Builder $query, array $filters): void
     {
+        $dateColumn = ($filters['status'] ?? '') === 'draft' ? 'created_at' : 'submitted_at';
         if (! empty($filters['date_from'])) {
-            $query->whereDate('submitted_at', '>=', $filters['date_from']);
+            $query->whereDate($dateColumn, '>=', $filters['date_from']);
         }
         if (! empty($filters['date_to'])) {
-            $query->whereDate('submitted_at', '<=', $filters['date_to']);
+            $query->whereDate($dateColumn, '<=', $filters['date_to']);
         }
     }
 }

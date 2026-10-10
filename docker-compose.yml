@@ -28,7 +28,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - CACHE_DRIVER=redis
+      - CACHE_STORE=redis
+      - SANCTUM_EXPIRATION=${SANCTUM_EXPIRATION:-60}
+      - LOGIN_ATTEMPTS_PER_MINUTE=${LOGIN_ATTEMPTS_PER_MINUTE:-5}
       - SESSION_DRIVER=redis
       - QUEUE_CONNECTION=redis
     depends_on:
