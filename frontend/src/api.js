@@ -132,22 +132,34 @@ export function deleteField(formId, versionId, fieldId) {
   });
 }
 
-export function submitForm(formId, values) {
+export function submitForm(formId, values, versionId) {
   return apiRequest(`/forms/${formId}/submit`, {
     method: 'POST',
-    body: JSON.stringify({ values }),
+    body: JSON.stringify({ values, version_id: versionId }),
   });
 }
 
-export function saveDraft(formId, values) {
+export function saveDraft(formId, values, versionId) {
   return apiRequest(`/forms/${formId}/drafts`, {
     method: 'POST',
-    body: JSON.stringify({ values }),
+    body: JSON.stringify({ values, version_id: versionId }),
   });
 }
 
 export function listDrafts(formId) {
   return apiRequest(`/forms/${formId}/drafts`);
+}
+
+export function updateDraft(formId, draftId, values) {
+  return apiRequest(`/forms/${formId}/drafts/${draftId}`, {
+    method: 'PATCH', body: JSON.stringify({ values }),
+  })
+}
+
+export function finalizeDraft(formId, draftId, values) {
+  return apiRequest(`/forms/${formId}/drafts/${draftId}/submit`, {
+    method: 'POST', body: JSON.stringify({ values }),
+  })
 }
 
 // Admin tenants (admin-sistema)

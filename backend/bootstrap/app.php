@@ -2,6 +2,8 @@
 
 use App\Exceptions\BusinessException;
 use App\Exceptions\NotFoundException;
+use App\Http\Middleware\AuditDeniedRequests;
+use App\Http\Middleware\EnsureActiveTenant;
 use App\Http\Middleware\EnsureTenantAccess;
 use App\Http\Middleware\EnsureUserRole;
 use Illuminate\Auth\AuthenticationException;
@@ -20,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prependToGroup('api', AuditDeniedRequests::class);
         $middleware->redirectGuestsTo(function (Request $request): ?string {
             if ($request->is('api/*')) {
                 return null;
@@ -29,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $middleware->alias([
+            'tenant.active' => EnsureActiveTenant::class,
             'role' => EnsureUserRole::class,
             'tenant.access' => EnsureTenantAccess::class,
         ]);

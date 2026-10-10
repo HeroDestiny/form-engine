@@ -50,11 +50,12 @@ class FormRepository implements FormRepositoryInterface
         return Form::query()->create($data);
     }
 
-    public function findInTenant(int $tenantId, int $formId): ?Form
+    public function findInTenant(int $tenantId, int $formId, bool $lock = false): ?Form
     {
         return Form::query()
             ->where('id', $formId)
             ->where('tenant_id', $tenantId)
+            ->when($lock, fn ($query) => $query->lockForUpdate())
             ->first();
     }
 

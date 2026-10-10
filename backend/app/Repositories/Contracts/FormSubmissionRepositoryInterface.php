@@ -10,6 +10,10 @@ interface FormSubmissionRepositoryInterface
 {
     public function create(array $data): FormSubmission;
 
+    public function lockDraft(int $tenantId, int $userId, int $formId, int $submissionId): ?FormSubmission;
+
+    public function update(FormSubmission $submission, array $data): FormSubmission;
+
     public function paginateForTenant(int $tenantId, ?int $ownerId, array $filters, int $perPage): LengthAwarePaginator;
 
     public function listDrafts(int $tenantId, int $userId, int $formId): Collection;

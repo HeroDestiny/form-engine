@@ -93,7 +93,12 @@ class QueryAuditUseCasesContractTest extends TestCase
             ->assertHeader('content-type', 'text/csv; charset=UTF-8')
             ->assertHeader('content-disposition');
 
-        $this->assertStringContainsString('ID,Usuário,Email,Data de Submissão,Versão', $response->streamedContent());
+        $stream = fopen('php://temp', 'w+');
+        fwrite($stream, substr($response->streamedContent(), 3));
+        rewind($stream);
+        $headers = fgetcsv($stream, null, ',', '"', '');
+        fclose($stream);
+        $this->assertSame(['ID', 'Usuário', 'Email', 'Data de Submissão', 'Versão'], array_slice($headers, 0, 5));
     }
 
     public function test_uc17_user_cannot_export_csv(): void

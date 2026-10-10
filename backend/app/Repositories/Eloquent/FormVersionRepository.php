@@ -23,12 +23,13 @@ class FormVersionRepository implements FormVersionRepositoryInterface
         return FormVersion::query()->create($data);
     }
 
-    public function findInTenant(int $tenantId, int $formId, int $versionId): ?FormVersion
+    public function findInTenant(int $tenantId, int $formId, int $versionId, bool $lock = false): ?FormVersion
     {
         return FormVersion::query()
             ->where('id', $versionId)
             ->where('form_id', $formId)
             ->whereHas('form', fn ($query) => $query->where('tenant_id', $tenantId))
+            ->when($lock, fn ($query) => $query->lockForUpdate())
             ->first();
     }
 

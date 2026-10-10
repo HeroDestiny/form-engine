@@ -15,6 +15,21 @@ class FormSubmissionRepository implements FormSubmissionRepositoryInterface
         return FormSubmission::query()->create($data);
     }
 
+    public function lockDraft(int $tenantId, int $userId, int $formId, int $submissionId): ?FormSubmission
+    {
+        return FormSubmission::query()->where('tenant_id', $tenantId)->where('submitted_by', $userId)
+            ->where('id', $submissionId)->where('status', 'draft')
+            ->whereHas('version', fn ($query) => $query->where('form_id', $formId))
+            ->lockForUpdate()->first();
+    }
+
+    public function update(FormSubmission $submission, array $data): FormSubmission
+    {
+        $submission->update($data);
+
+        return $submission->fresh();
+    }
+
     public function paginateForTenant(int $tenantId, ?int $ownerId, array $filters, int $perPage): LengthAwarePaginator
     {
         $status = in_array($filters['status'] ?? '', ['submitted', 'draft'], true) ? $filters['status'] : 'submitted';

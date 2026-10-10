@@ -979,7 +979,7 @@ paths:
       tags:
         - Submissões
       summary: Submeter formulário
-      description: Preenche e submete formulário
+      description: Preenche e submete formulário. version_id opcional fixa uma versão publicada; quando omitido, usa a última publicada.
       operationId: submitForm
       security:
         - bearerAuth: []
@@ -1006,6 +1006,9 @@ paths:
                     estado_civil: solteiro
                     data_nascimento: '1990-05-15'
                     telefone: (11) 98765-4321
+                version_id:
+                  type: integer
+                  description: ID de uma versão publicada deste formulário.
       responses:
         '201':
           description: Formulário submetido
@@ -1080,7 +1083,7 @@ paths:
       tags:
         - Submissões
       summary: Salvar rascunho
-      description: Salva preenchimento parcial
+      description: Salva preenchimento parcial. version_id opcional fixa uma versão publicada; quando omitido, usa a última publicada.
       operationId: saveDraft
       security:
         - bearerAuth: []
@@ -1102,6 +1105,9 @@ paths:
                 values:
                   type: object
                   additionalProperties: true
+                version_id:
+                  type: integer
+                  description: ID de uma versão publicada deste formulário.
       responses:
         '201':
           description: Rascunho salvo
@@ -1123,6 +1129,72 @@ paths:
                             type: integer
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /forms/{formId}/drafts/{submissionId}:
+    parameters:
+      - name: formId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: submissionId
+        in: path
+        required: true
+        schema: {type: integer}
+    patch:
+      tags: [Submissões]
+      summary: Atualizar rascunho existente
+      description: Apenas o proprietário pode alterar o rascunho. Substitui todos os valores, mantém o ID e a versão original. Um objeto vazio limpa os valores. version_id não é permitido.
+      operationId: updateDraft
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftValuesPayload'
+      responses:
+        '200':
+          description: Rascunho atualizado; data.draft contém o registro.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SuccessResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /forms/{formId}/drafts/{submissionId}/submit:
+    parameters:
+      - name: formId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: submissionId
+        in: path
+        required: true
+        schema: {type: integer}
+    post:
+      tags: [Submissões]
+      summary: Finalizar rascunho existente
+      description: Valida todos os obrigatórios da versão original e converte o mesmo registro em submitted, com submitted_at. Dados de outro proprietário ou tenant e registros já finalizados retornam 404.
+      operationId: finalizeDraft
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftValuesPayload'
+      responses:
+        '200':
+          description: Rascunho finalizado; data.submission contém o registro.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SuccessResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
 
   /submissions:
     get:
@@ -1262,6 +1334,10 @@ paths:
                   type: string
                   enum: [csv]
                   default: csv
+                separator:
+                  type: string
+                  enum: [',', ';']
+                  default: ','
       responses:
         '200':
           description: CSV gerado
@@ -1409,6 +1485,14 @@ components:
       description: Itens por página
 
   schemas:
+    DraftValuesPayload:
+      type: object
+      required: [values]
+      properties:
+        values:
+          type: object
+          additionalProperties: true
+          example: {nome_completo: Maria Santos}
     # ========== Respostas Base ==========
     SuccessResponse:
       type: object
@@ -1796,7 +1880,11 @@ components:
               type:
                 type: string
               value:
-                type: string
+                nullable: true
+                oneOf:
+                  - type: string
+                  - type: array
+                    items: {type: string}
               value_label:
                 type: string
                 description: Label da option (para select/radio)

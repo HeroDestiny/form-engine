@@ -378,3 +378,17 @@ A suíte possui 75 testes, incluindo regressões para isolamento antes da valida
 O `phpunit.xml` força as variáveis de teste em `env` e `server`, inclusive SQLite em memória, para impedir que a configuração PostgreSQL do Docker prevaleça pela precedência de `$_SERVER`. `tests/TestCase.php` verifica o ambiente e a conexão antes de executar as migrations dos testes e interrompe a suíte se o isolamento não estiver correto.
 
 Pendências funcionais identificadas na revisão seguem separadas desta consolidação: geração automática de auditoria, validação completa de e-mail e checkbox, evolução do ciclo de rascunhos, bloqueio de tokens de tenants desativados e ajustes na exportação CSV. O isolamento atual utiliza filtros explícitos nos Repositories; os escopos globais descritos na estratégia original ainda não foram adotados.
+
+# 19. Consolidação de Acesso e Valores Dinâmicos — 2026-10-10
+
+O middleware `EnsureActiveTenant`, aplicado após `auth:sanctum`, verifica o status atual do tenant nas APIs de dados e em `/api/auth/me`. Tenant desativado recebe 403 mesmo com token previamente emitido. Logout permanece disponível para revogação. A reativação restabelece o acesso com tokens ainda válidos. As sessões de usuários individualmente desativados mantêm a política do UC04 RN07, sem revogação imediata nesta etapa.
+
+`SubmissionService` valida o formato de email, permite valores opcionais nulos e exige listas de opções válidas para checkbox. No draft, os campos podem ser omitidos; quando preenchidos, precisam respeitar seus tipos e opções. `SubmissionFieldValue` centraliza a serialização de checkbox como JSON em texto e a recuperação como array, com leitura compatível com valores antigos separados por vírgula. `SubmissionCsvService` converte as escolhas de checkbox em labels para exportação.
+
+O frontend envia checkbox como array conforme o contrato do UC13. A suíte passou com 94 testes e 392 assertions; o build do frontend passou. Permanecem pendentes auditoria automática, evolução de rascunhos, comprovação completa do histórico, filtros/paginação, formatação geral do CSV e testes com PostgreSQL exclusivo.
+
+# 20. Consolidação Funcional e PostgreSQL — 2026-10-10
+
+A sequência seguinte implementou auditoria automática, edição/finalização de drafts existentes, preservação de versão explícita no preenchimento, bloqueios transacionais em versionamento/campos e CSV com escaping e colunas combinadas por nome. As migrations acrescentam unicidade de draft de versão e imutabilidade dos logs no banco. O CI valida os mesmos contratos em SQLite e PostgreSQL exclusivo, incluindo um teste de bloqueio com duas conexões no perfil PostgreSQL.
+
+Contratos, comandos, limites e pendências atuais estão em [Consolidação funcional do backend](consolidacao-backend.md). As pendências listadas nas seções anteriores representam o estado das etapas anteriores e devem ser lidas junto a esta atualização.

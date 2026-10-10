@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Validation\Rule;
+
 class ExportSubmissionsRequest extends ApiRequest
 {
     public function rules(): array
@@ -13,6 +15,7 @@ class ExportSubmissionsRequest extends ApiRequest
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
             'format' => ['nullable', 'in:csv'],
+            'separator' => ['sometimes', Rule::in([',', ';'])],
         ];
     }
 }
