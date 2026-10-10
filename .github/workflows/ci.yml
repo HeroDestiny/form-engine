@@ -36,6 +36,7 @@ jobs:
 
       - name: Prepare Laravel environment
         run: |
+          mkdir -p storage/framework/{cache/data,sessions,views} storage/logs bootstrap/cache
           cp .env.example .env
           php artisan key:generate
 
