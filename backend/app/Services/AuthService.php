@@ -44,7 +44,7 @@ class AuthService
             throw new BusinessException('E-mail ou senha incorretos', 'invalid_credentials');
         }
 
-        if (! $tenantSlug && $users->count() > 1) {
+        if (($tenantSlug === null || $tenantSlug === '') && $users->count() > 1) {
             throw new BusinessException('Erro de validação', errors: [
                 'tenant_slug' => ['Informe o tenant para autenticar este e-mail.'],
             ]);
@@ -66,6 +66,9 @@ class AuthService
 
     public function logout(User $user): void
     {
-        $this->userRepository->revokeCurrentToken($user);
+        DB::transaction(function () use ($user): void {
+            $this->userRepository->revokeCurrentToken($user);
+            $this->audit->record('LOGOUT', $user->tenant_id, 'user', $user->id, actorId: $user->id);
+        });
     }
 }

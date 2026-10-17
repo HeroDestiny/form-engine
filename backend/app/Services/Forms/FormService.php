@@ -48,7 +48,7 @@ class FormService
 
     public function listForUser(User $actor, ?string $search = null, string $sort = 'name', string $order = 'asc', string $scope = ''): Collection
     {
-        if ($scope === 'all' && in_array($actor->role, ['manager', 'admin'], true)) {
+        if ($scope === 'all' && in_array($actor->role, ['manager', 'admin', 'admin-sistema'], true)) {
             return $this->listAllForTenant((int) $actor->tenant_id, $search, $sort, $order);
         }
 

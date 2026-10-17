@@ -87,7 +87,7 @@ Permite ao administrador do sistema criar uma nova unidade administrativa (tenan
 | Campo | Tipo | Obrigatório | Validação |
 |-------|------|-------------|-----------|
 | name | string | Sim | Min: 3, Max: 255 |
-| slug | string | Sim | Único, formato: `^[a-z0-9-]+$` |
+| slug | string | Sim | Único, máximo 100 caracteres, formato: `^[a-z0-9-]+$` |
 
 ---
 

@@ -8,7 +8,7 @@ class StoreTenantRequest extends ApiRequest
     {
         return [
             'name' => ['required', 'string', 'min:3', 'max:255'],
-            'slug' => ['required', 'string', 'regex:/^[a-z0-9-]+$/', 'unique:tenants,slug'],
+            'slug' => ['required', 'string', 'max:100', 'regex:/^[a-z0-9-]+$/', 'unique:tenants,slug'],
         ];
     }
 }

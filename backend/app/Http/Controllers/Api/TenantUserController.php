@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\PaginatedQueryRequest;
 use App\Http\Requests\StoreTenantUserRequest;
 use App\Http\Requests\UpdateStatusRequest;
 use App\Services\TenantUserService;
@@ -12,10 +13,9 @@ class TenantUserController extends Controller
 {
     public function __construct(private readonly TenantUserService $tenantUserService) {}
 
-    public function index(int $tenantId): JsonResponse
+    public function index(PaginatedQueryRequest $request, int $tenantId): JsonResponse
     {
-        $perPage = max(1, min(100, (int) request()->integer('per_page', 20)));
-        $paginator = $this->tenantUserService->listForTenantPaginated($tenantId, $perPage);
+        $paginator = $this->tenantUserService->listForTenantPaginated($tenantId, $request->perPage());
 
         return response()->json([
             'success' => true,

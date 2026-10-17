@@ -79,7 +79,7 @@ O `docker-compose.yml` atual sobe backend, Nginx, PostgreSQL, Redis e pgAdmin op
 - [x] Documentação de arquitetura técnica
 - [x] Modelo de dados
 - [x] 21 casos de uso especificados
-- [x] Especificação REST com 29 endpoints
+- [x] Especificação REST com 31 operações
 - [x] Ambiente Docker para backend/infra
 - [x] Estrutura base do backend
 - [x] Padrão de camadas
@@ -114,7 +114,7 @@ O `docker-compose.yml` atual sobe backend, Nginx, PostgreSQL, Redis e pgAdmin op
 - [x] CI de backend e frontend
 - [ ] Testes automatizados do frontend
 - [ ] Guards centralizados no Vue Router
-- [ ] Testes de integração periódicos com PostgreSQL
+- [x] Testes de integração com PostgreSQL e SQLite no CI
 - [x] Consolidação do padrão Service/Repository e validação via Form Requests
 - [ ] Pipeline de deploy
 
@@ -271,8 +271,9 @@ O workflow `.github/workflows/ci.yml` executa em pull requests e pushes para `ma
 - [`docs/casos-de-uso/`](docs/casos-de-uso/) — 21 casos de uso
 - [`docs/api/openapi.yaml`](docs/api/openapi.yaml) — especificação OpenAPI
 - [`docs/api/README.md`](docs/api/README.md) — guia da API
-- [`docs/api/quick-reference.md`](docs/api/quick-reference.md) — referência rápida
 - [`docs/api/postman-collection.json`](docs/api/postman-collection.json) — coleção Postman
+- [`docs/testes.md`](docs/testes.md) — testes e qualidade
+- [`docs/operacao-producao.md`](docs/operacao-producao.md) — deploy, saúde, backup e rollback
 
 ## 📂 Estrutura
 
@@ -304,11 +305,11 @@ form-engine/
 
 ## 🔐 Segurança
 
-Os contratos de auditoria, rascunhos, versionamento e exportação, assim como os comandos dos testes isolados em SQLite e PostgreSQL, estão em [Consolidação funcional do backend](docs/consolidacao-backend.md).
+Consulte o [guia da API](docs/api/README.md) para os contratos e limites, a [arquitetura](docs/arquitetura.md) para as decisões técnicas e o [guia de testes](docs/testes.md) para executar as suítes isoladas.
 
 O backend aplica isolamento por tenant e autorização por papel nos endpoints protegidos. Recursos pertencentes a outro tenant são tratados como não encontrados nos fluxos protegidos correspondentes.
 
-Para produção, ainda é recomendável revisar a estratégia de armazenamento do token no frontend, hardening de exportações CSV e configurações específicas do ambiente de deploy.
+O CSV já inclui escaping e proteção contra fórmulas. Para produção, revise a estratégia de armazenamento do token no frontend e configure domínio/TLS, backups externos, agendamento e alertas conforme o [guia operacional](docs/operacao-producao.md).
 
 ## 🤝 Contribuindo
 

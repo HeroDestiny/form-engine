@@ -50,13 +50,13 @@ class UserRepository implements UserRepositoryInterface
         return User::query()
             ->with('tenant')
             ->where('email', $email)
-            ->when($tenantSlug, fn ($query) => $query->whereHas('tenant', fn ($tenantQuery) => $tenantQuery->where('slug', $tenantSlug)))
+            ->when($tenantSlug !== null && $tenantSlug !== '', fn ($query) => $query->whereHas('tenant', fn ($tenantQuery) => $tenantQuery->where('slug', $tenantSlug)))
             ->get();
     }
 
     public function issueToken(User $user): string
     {
-        return $user->createToken('auth-token')->plainTextToken;
+        return $user->createToken('auth-token', ['*'], now()->addMinutes((int) config('sanctum.expiration')))->plainTextToken;
     }
 
     public function revokeCurrentToken(User $user): void

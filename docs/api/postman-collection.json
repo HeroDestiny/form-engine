@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Form Engine API",
-    "description": "Collection completa da API Form Engine v1.0",
+    "description": "Form Engine v1.0: 31 operações da API, com dois exemplos de criação de campo (32 requisições). Atualizada em 17/10/2026. Edite as credenciais antes de executar; os exemplos de submissão dependem dos campos da versão publicada. Edição/finalização de rascunhos são restritas ao proprietário. Contrato completo em docs/api/README.md.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "form-engine"
   },
@@ -40,6 +40,26 @@
       "key": "version_id",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "tenant_slug",
+      "value": "demo",
+      "type": "string"
+    },
+    {
+      "key": "login_email",
+      "value": "admin@formengine.local",
+      "type": "string"
+    },
+    {
+      "key": "login_password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "submission_id",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -57,7 +77,6 @@
                   "    const jsonData = pm.response.json();",
                   "    pm.collectionVariables.set('token', jsonData.data.token);",
                   "    pm.collectionVariables.set('tenant_id', jsonData.data.tenant.id);",
-                  "    console.log('Token saved:', jsonData.data.token);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -77,13 +96,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"senha123\"\n}"
+              "raw": "{\n  \"email\": \"{{login_email}}\",\n  \"password\": \"{{login_password}}\",\n  \"tenant_slug\": \"{{tenant_slug}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/auth/login",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "login"]
-            }
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Preencha login_password nas variáveis da coleção. Não salve credenciais reais no Git. tenant_slug desambigua e-mails presentes em vários tenants. Token expira por padrão em 60 minutos; excesso de tentativas retorna 429."
           },
           "response": []
         },
@@ -94,8 +119,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/auth/logout",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "logout"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
             }
           },
           "response": []
@@ -107,8 +137,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/auth/me",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "me"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
             }
           },
           "response": []
@@ -125,8 +160,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/admin/tenants?page=1&per_page=20",
-              "host": ["{{base_url}}"],
-              "path": ["admin", "tenants"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "tenants"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -157,8 +197,13 @@
             },
             "url": {
               "raw": "{{base_url}}/admin/tenants",
-              "host": ["{{base_url}}"],
-              "path": ["admin", "tenants"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "tenants"
+              ]
             }
           },
           "response": []
@@ -179,8 +224,15 @@
             },
             "url": {
               "raw": "{{base_url}}/admin/tenants/{{tenant_id}}/status",
-              "host": ["{{base_url}}"],
-              "path": ["admin", "tenants", "{{tenant_id}}", "status"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "tenants",
+                "{{tenant_id}}",
+                "status"
+              ]
             }
           },
           "response": []
@@ -197,8 +249,14 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/tenants/{{tenant_id}}/users",
-              "host": ["{{base_url}}"],
-              "path": ["tenants", "{{tenant_id}}", "users"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_id}}",
+                "users"
+              ]
             }
           },
           "response": []
@@ -219,8 +277,14 @@
             },
             "url": {
               "raw": "{{base_url}}/tenants/{{tenant_id}}/users",
-              "host": ["{{base_url}}"],
-              "path": ["tenants", "{{tenant_id}}", "users"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_id}}",
+                "users"
+              ]
             }
           },
           "response": []
@@ -241,8 +305,16 @@
             },
             "url": {
               "raw": "{{base_url}}/tenants/{{tenant_id}}/users/:userId/status",
-              "host": ["{{base_url}}"],
-              "path": ["tenants", "{{tenant_id}}", "users", ":userId", "status"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_id}}",
+                "users",
+                ":userId",
+                "status"
+              ],
               "variable": [
                 {
                   "key": "userId",
@@ -265,8 +337,12 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/forms?search=&sort=name&order=asc",
-              "host": ["{{base_url}}"],
-              "path": ["forms"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms"
+              ],
               "query": [
                 {
                   "key": "search",
@@ -316,8 +392,12 @@
             },
             "url": {
               "raw": "{{base_url}}/forms",
-              "host": ["{{base_url}}"],
-              "path": ["forms"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms"
+              ]
             }
           },
           "response": []
@@ -329,8 +409,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}"
+              ]
             }
           },
           "response": []
@@ -351,8 +436,43 @@
             },
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/status",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "status"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Criar Formulário no Tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Manager/admin ou admin-sistema; tenant_id deve ser o próprio tenant do usuário.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Formulário do tenant\",\n  \"description\": \"Descrição opcional\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_id}}/forms",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_id}}",
+                "forms"
+              ]
             }
           },
           "response": []
@@ -369,8 +489,14 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/versions",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "versions"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "versions"
+              ]
             }
           },
           "response": []
@@ -382,8 +508,14 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/versions",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "versions"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "versions"
+              ]
             }
           },
           "response": []
@@ -395,8 +527,16 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/publish",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "publish"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "versions",
+                "{{version_id}}",
+                "publish"
+              ]
             }
           },
           "response": []
@@ -413,8 +553,16 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/fields",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "fields"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "versions",
+                "{{version_id}}",
+                "fields"
+              ]
             }
           },
           "response": []
@@ -435,8 +583,16 @@
             },
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/fields",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "fields"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "versions",
+                "{{version_id}}",
+                "fields"
+              ]
             }
           },
           "response": []
@@ -457,8 +613,16 @@
             },
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/fields",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "fields"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "versions",
+                "{{version_id}}",
+                "fields"
+              ]
             }
           },
           "response": []
@@ -479,8 +643,17 @@
             },
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/fields/:fieldId",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "fields", ":fieldId"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "versions",
+                "{{version_id}}",
+                "fields",
+                ":fieldId"
+              ],
               "variable": [
                 {
                   "key": "fieldId",
@@ -498,8 +671,17 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/versions/{{version_id}}/fields/:fieldId",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "versions", "{{version_id}}", "fields", ":fieldId"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "versions",
+                "{{version_id}}",
+                "fields",
+                ":fieldId"
+              ],
               "variable": [
                 {
                   "key": "fieldId",
@@ -531,8 +713,14 @@
             },
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/submit",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "submit"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "submit"
+              ]
             }
           },
           "response": []
@@ -553,11 +741,30 @@
             },
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/drafts",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "drafts"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "drafts"
+              ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set(\"submission_id\", pm.response.json().data.draft.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Listar Rascunhos",
@@ -566,8 +773,14 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/forms/{{form_id}}/drafts",
-              "host": ["{{base_url}}"],
-              "path": ["forms", "{{form_id}}", "drafts"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "drafts"
+              ]
             }
           },
           "response": []
@@ -579,8 +792,12 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/submissions?form_id={{form_id}}&status=submitted&page=1&per_page=20",
-              "host": ["{{base_url}}"],
-              "path": ["submissions"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "submissions"
+              ],
               "query": [
                 {
                   "key": "form_id",
@@ -610,13 +827,79 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/submissions/:submissionId",
-              "host": ["{{base_url}}"],
-              "path": ["submissions", ":submissionId"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "submissions",
+                ":submissionId"
+              ],
               "variable": [
                 {
                   "key": "submissionId",
                   "value": "452"
                 }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Editar Rascunho",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Preencha submission_id com data.draft.id do rascunho criado. Substitui todas as respostas, mantendo a versão; somente o proprietário pode editar.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"values\": {\n    \"nome_completo\": \"Maria Santos\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/drafts/{{submission_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "drafts",
+                "{{submission_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Finalizar Rascunho",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Adapte values a todos os obrigatórios da versão original. Somente o proprietário; retorna 200 com data.submission e mantém o ID.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"values\": {\n    \"nome_completo\": \"Maria Santos\",\n    \"estado_civil\": \"solteiro\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/forms/{{form_id}}/drafts/{{submission_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "forms",
+                "{{form_id}}",
+                "drafts",
+                "{{submission_id}}",
+                "submit"
               ]
             }
           },
@@ -643,8 +926,13 @@
             },
             "url": {
               "raw": "{{base_url}}/submissions/export",
-              "host": ["{{base_url}}"],
-              "path": ["submissions", "export"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "submissions",
+                "export"
+              ]
             }
           },
           "response": []
@@ -661,8 +949,12 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/audit-logs?page=1&per_page=50",
-              "host": ["{{base_url}}"],
-              "path": ["audit-logs"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "audit-logs"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -684,8 +976,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/audit-logs/:logId",
-              "host": ["{{base_url}}"],
-              "path": ["audit-logs", ":logId"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "audit-logs",
+                ":logId"
+              ],
               "variable": [
                 {
                   "key": "logId",

@@ -17,10 +17,10 @@ class FormRepository implements FormRepositoryInterface
             ->with(['versions' => fn ($builder) => $builder->where('is_published', true)->orderByDesc('version_number')->withCount('fields')]);
 
         if ($search !== null && $search !== '') {
-            $query->where('name', 'like', '%'.$search.'%');
+            $query->whereLike('name', '%'.$search.'%');
         }
 
-        return $query->orderBy($sort, $order)->get();
+        return $query->orderBy($sort, $order)->orderBy('id', $order)->get();
     }
 
     public function listAllForTenant(int $tenantId, ?string $search, string $sort, string $order): Collection
@@ -30,10 +30,10 @@ class FormRepository implements FormRepositoryInterface
             ->with(['versions' => fn ($builder) => $builder->orderByDesc('version_number')->withCount('fields')]);
 
         if ($search !== null && $search !== '') {
-            $query->where('name', 'like', '%'.$search.'%');
+            $query->whereLike('name', '%'.$search.'%');
         }
 
-        return $query->orderBy($sort, $order)->get();
+        return $query->orderBy($sort, $order)->orderBy('id', $order)->get();
     }
 
     public function findDetailedInTenant(int $tenantId, int $formId): ?Form

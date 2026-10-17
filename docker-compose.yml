@@ -4,6 +4,7 @@ services:
     build:
       context: ./backend
       dockerfile: ../docker/backend/Dockerfile
+      target: development
       args:
         USER_ID: ${USER_ID:-1000}
         GROUP_ID: ${GROUP_ID:-1000}
@@ -28,7 +29,11 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - CACHE_DRIVER=redis
+      - CACHE_STORE=redis
+      - SANCTUM_EXPIRATION=${SANCTUM_EXPIRATION:-60}
+      - LOGIN_ATTEMPTS_PER_MINUTE=${LOGIN_ATTEMPTS_PER_MINUTE:-5}
+      - EXPORT_MAX_ROWS=${EXPORT_MAX_ROWS:-10000}
+      - EXPORT_MAX_BYTES=${EXPORT_MAX_BYTES:-26214400}
       - SESSION_DRIVER=redis
       - QUEUE_CONNECTION=redis
     depends_on:
@@ -114,7 +119,7 @@ services:
 
   # PostgreSQL Database
   postgres:
-    image: postgres:17.2-alpine  # Versão específica
+    image: postgres:17.11-alpine  # Versão corretiva da série 17
     container_name: form-engine-postgres
     restart: unless-stopped
     environment:
@@ -166,7 +171,10 @@ services:
 
   # Redis Cache
   redis:
-    image: redis:7.4.1-alpine  # Versão específica
+    user: redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    image: redis:7.4.11-alpine  # Versão corretiva da série 7.4
     container_name: form-engine-redis
     restart: unless-stopped
     # Porta removida - não expor para o host (acesso apenas interno via network)
@@ -185,7 +193,7 @@ services:
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -qx PONG"]
       interval: 10s
       timeout: 5s
       retries: 5

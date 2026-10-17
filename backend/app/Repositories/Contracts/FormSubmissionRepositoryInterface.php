@@ -20,5 +20,9 @@ interface FormSubmissionRepositoryInterface
 
     public function findInTenant(int $tenantId, int $submissionId): ?FormSubmission;
 
-    public function listForExport(int $tenantId, int $formId, array $filters): Collection;
+    public function selectForExport(int $tenantId, int $formId, array $filters, int $limit): array;
+
+    public function versionsForExport(int $tenantId, int $formId, array $versionIds): Collection;
+
+    public function iterateForExport(int $tenantId, int $formId, array $ids, int $chunkSize): iterable;
 }

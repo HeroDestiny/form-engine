@@ -6,6 +6,17 @@ use App\Models\FormField;
 
 class SubmissionFieldValue
 {
+    public static function label(FormField $field, ?string $value): ?string
+    {
+        foreach ($field->options ?? [] as $option) {
+            if (($option['value'] ?? null) === $value) {
+                return $option['label'] ?? $value;
+            }
+        }
+
+        return $value;
+    }
+
     public static function encode(FormField $field, mixed $value): ?string
     {
         if ($value === null) {

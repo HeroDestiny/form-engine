@@ -1,240 +1,42 @@
-#  Modelo de Dados Inicial — Form Engine (v1)
+# Modelo de dados
 
----
+O banco de execução é PostgreSQL. SQLite em memória é usado em parte da suíte de testes. As definições executáveis estão nas migrations em `backend/database/migrations`; todas as tabelas de domínio abaixo possuem `id`, `created_at` e `updated_at`.
 
-# 1️⃣ Entidades Principais
+## Entidades
 
-## 🏢 Tenant (Unidade Administrativa)
+| Tabela | Dados principais | Vínculos e restrições |
+|---|---|---|
+| `tenants` | `name`, `slug`, `is_active` | Slug único; unidade de isolamento. |
+| `users` | `tenant_id`, `name`, `email`, `password`, `role`, `is_active`, `email_verified_at`, `remember_token` | Um tenant por usuário; e-mail único no tenant. Papéis: user, manager, admin, admin-sistema. |
+| `forms` | `tenant_id`, `name`, `description`, `is_active`, `created_by` | Nome único no tenant; autor vinculado a users. |
+| `form_versions` | `form_id`, `version_number`, `is_published`, `published_at`, `created_by` | Número único por formulário; índice parcial limita a uma versão não publicada por formulário. |
+| `form_fields` | `form_version_id`, `label`, `name`, `type`, `is_required`, `options`, `order` | Nome técnico único na versão; options é JSON para escolhas. |
+| `form_submissions` | `tenant_id`, `form_version_id`, `status`, `submitted_by`, `submitted_at` | Status draft/submitted; submitted_at nulo no draft; versão e proprietário preservados na finalização. |
+| `form_submission_values` | `form_submission_id`, `form_field_id`, `value` | Um registro por resposta de campo criada pela aplicação; value é texto anulável e checkbox é codificado como JSON. |
+| `audit_logs` | `tenant_id`, `user_id`, `action`, `entity_type`, `entity_id`, `metadata`, `ip_address`, `user_agent` | Tenant/ator/entidade podem ser nulos; metadata é JSON; alteração e exclusão bloqueadas. |
 
-Representa o isolamento institucional.
+Os campos suportam text, textarea, number, email, date, select, radio e checkbox. Submissões armazenam respostas por campo, em vez de um único JSON com o formulário completo. A aplicação reconstrói os tipos e labels para detalhes e exportação.
 
-```text
-tenants
-- id (PK)
-- name
-- slug
-- is_active
-- created_at
-- updated_at
-```
-
-### Regras:
-
-* Todos os dados do sistema devem pertencer a um tenant.
-* Slug será usado para identificação contextual futura (ex: subdomínio).
-
----
-
-## 👤 User
-
-Usuário do sistema vinculado a um tenant.
+## Relacionamentos
 
 ```text
-users
-- id (PK)
-- tenant_id (FK → tenants.id)
-- name
-- email
-- password
-- role (admin | manager | user)
-- is_active
-- created_at
-- updated_at
+Tenant → Users
+Tenant → Forms → Form Versions → Form Fields
+Tenant → Form Submissions → Submission Values
+Form Version → Form Submissions
+User → Form Submissions (submitted_by)
+Form Field → Submission Values
+Tenant / User → Audit Logs
 ```
 
-### Regras:
+Versões e campos herdam o tenant pelo formulário. A aplicação confere esses vínculos; não há banco separado por tenant. Novas versões não alteram a estrutura vinculada às submissões existentes.
 
-* Usuário pertence a apenas um tenant na v1.
-* Isolamento é garantido via tenant_id.
+## Integridade e auditoria
 
----
+As unicidades de negócio são protegidas por índices no banco. A aplicação combina transações e bloqueios para preservar versão draft única, publicação e finalização concorrentes. Versões publicadas são imutáveis nos fluxos da aplicação.
 
-## 📝 Form
+Logs possuem índices por tenant/data e por ação/tipo de entidade. Triggers específicas para SQLite/PostgreSQL impedem UPDATE e DELETE. Embora os vínculos de auditoria tenham `nullOnDelete`, as triggers impedem essa mutação indireta; uma futura exclusão de tenant/usuário precisa definir retenção compatível. A v1 expõe desativação desses recursos, sem endpoints de exclusão.
 
-Representa uma ficha lógica (entidade raiz).
+## Tabelas de infraestrutura
 
-```text
-forms
-- id (PK)
-- tenant_id (FK)
-- name
-- description
-- is_active
-- created_by (FK → users.id)
-- created_at
-- updated_at
-```
-
-### Regras:
-
-* Um form pode ter múltiplas versões.
-* Não armazena campos diretamente.
-
----
-
-## 📌 Form Version
-
-Versão imutável da estrutura de uma ficha.
-
-```text
-form_versions
-- id (PK)
-- form_id (FK → forms.id)
-- version_number
-- is_published
-- published_at
-- created_by (FK → users.id)
-- created_at
-```
-
-### Regras:
-
-* Versão publicada não pode ser alterada.
-* Cada resposta sempre pertence a uma versão específica.
-
----
-
-## 🧩 Form Field
-
-Campos pertencentes a uma versão.
-
-```text
-form_fields
-- id (PK)
-- form_version_id (FK)
-- label
-- name
-- type (text, number, date, select, checkbox, etc.)
-- is_required
-- options (JSON nullable)
-- order
-- created_at
-```
-
-### Regras:
-
-* Pertence sempre a uma versão.
-* Nunca pertence diretamente ao form.
-* Options será JSON para tipos como select.
-
----
-
-## 📥 Form Submission
-
-Resposta preenchida por um usuário.
-
-```text
-form_submissions
-- id (PK)
-- tenant_id (FK)
-- form_version_id (FK)
-- submitted_by (FK → users.id)
-- submitted_at
-- created_at
-```
-
-### Regras:
-
-* Sempre vinculada a uma versão específica.
-* Não muda se nova versão for criada.
-
----
-
-## 📦 Form Submission Value
-
-Valores individuais por campo.
-
-```text
-form_submission_values
-- id (PK)
-- form_submission_id (FK)
-- form_field_id (FK)
-- value (TEXT)
-- created_at
-```
-
-### Regras:
-
-* Estrutura flexível.
-* Permite armazenar qualquer tipo como string.
-* Conversão tipada pode ocorrer no Service.
-
----
-
-## 📊 Audit Log
-
-Auditoria básica.
-
-```text
-audit_logs
-- id (PK)
-- tenant_id (FK)
-- user_id (FK)
-- action (CREATE_FORM, UPDATE_FORM, SUBMIT_FORM, etc.)
-- entity_type (form, submission, user, etc.)
-- entity_id
-- metadata (JSON nullable)
-- created_at
-```
-
-### Regras:
-
-* Não depende de pacote externo.
-* Simples e estruturado.
-
----
-
-# 2️⃣ Relacionamentos
-
-Resumo:
-
-```
-Tenant
- ├── Users
- ├── Forms
- ├── Form Submissions
- └── Audit Logs
-
-Form
- └── Form Versions
-      └── Form Fields
-
-Form Version
- └── Form Submissions
-      └── Submission Values
-```
-
----
-
-# 3️⃣ Princípios do Modelo
-
-✔️ Isolamento lógico via tenant_id
-✔️ Versionamento imutável
-✔️ Estrutura flexível de campos
-✔️ Submissão preserva histórico
-✔️ Auditoria independente
-
----
-
-# 4️⃣ Índices Recomendados
-
-* users.tenant_id
-* forms.tenant_id
-* form_submissions.tenant_id
-* form_versions.form_id
-* form_fields.form_version_id
-* audit_logs.tenant_id
-
-Esses garantem performance no isolamento.
-
----
-
-# 5️⃣ Decisões Arquiteturais Importantes
-
-* Não usar banco por tenant (v1)
-* Não usar JSON para guardar toda submissão (estrutura normalizada)
-* Não permitir edição de versão publicada
-* Não implementar hierarquia complexa ainda
-
-
-Qual próximo passo?
+Sanctum usa `personal_access_tokens`, incluindo expiração. Migrations do Laravel também criam tabelas de sessões, recuperação de senha, cache e jobs. Sua existência não significa que haja endpoints públicos de recuperação de senha ou workers de fila: cache é Redis no Docker e filas usam execução síncrona.

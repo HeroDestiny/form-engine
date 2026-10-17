@@ -71,7 +71,7 @@ onMounted(() => {
             <li v-for="v in state.submission.values" :key="v.field_id" class="field-row">
               <div class="field-row-main">
                 <strong>{{ v.label }}</strong>
-                <span class="field-row-meta">{{ v.value }}</span>
+                <span class="field-row-meta">{{ v.value_formatted ?? v.value_label ?? (v.value_labels ? v.value_labels.join('; ') : v.value) }}</span>
               </div>
             </li>
           </ul>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ExportSubmissionsRequest;
 use App\Http\Requests\FinalizeDraftRequest;
+use App\Http\Requests\ListSubmissionsRequest;
 use App\Http\Requests\SaveDraftRequest;
 use App\Http\Requests\SubmitFormRequest;
 use App\Http\Requests\UpdateDraftRequest;
@@ -17,10 +18,9 @@ class SubmissionController extends Controller
 {
     public function __construct(private readonly SubmissionService $submissionService) {}
 
-    public function index(Request $request): JsonResponse
+    public function index(ListSubmissionsRequest $request): JsonResponse
     {
-        $perPage = max(1, min(100, (int) $request->integer('per_page', 20)));
-        $paginator = $this->submissionService->listForUser($request->user(), $request->only(['status', 'form_id', 'version_id', 'date_from', 'date_to', 'user_id']), $perPage);
+        $paginator = $this->submissionService->listForUser($request->user(), $request->validated(), $request->perPage());
         $submissions = $paginator->getCollection();
 
         return response()->json([
@@ -67,8 +67,12 @@ class SubmissionController extends Controller
         $csv = $this->submissionService->exportForUser($request->user(), $request->validated());
 
         return response()->streamDownload(function () use ($csv) {
-            echo $csv['content'];
-        }, $csv['filename'], ['Content-Type' => 'text/csv; charset=UTF-8']);
+            try {
+                fpassthru($csv['stream']);
+            } finally {
+                fclose($csv['stream']);
+            }
+        }, $csv['filename'], ['Content-Type' => 'text/csv; charset=UTF-8', 'Content-Length' => (string) $csv['bytes']]);
     }
 
     public function submit(SubmitFormRequest $request, int $formId): JsonResponse

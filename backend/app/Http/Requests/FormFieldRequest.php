@@ -34,15 +34,15 @@ class FormFieldRequest extends ApiRequest
         return [
             'label' => ['required', 'string', 'min:2', 'max:255'],
             'name' => [
-                'required', 'string', 'regex:/^[a-z0-9_]+$/',
+                'required', 'string', 'max:100', 'regex:/^[a-z0-9_]+$/',
                 Rule::unique('form_fields', 'name')->where(fn ($query) => $query->where('form_version_id', $this->version->id))->ignore($this->field?->id),
             ],
             'type' => ['required', Rule::in(['text', 'textarea', 'number', 'email', 'date', 'select', 'radio', 'checkbox'])],
             'is_required' => ['required', 'boolean'],
-            'order' => ['required', 'integer', 'min:1'],
-            'options' => ['required_if:type,select,radio,checkbox', 'array'],
-            'options.*.value' => ['required_with:options', 'string'],
-            'options.*.label' => ['required_with:options', 'string'],
+            'order' => ['required', 'integer', 'between:1,2147483647'],
+            'options' => ['required_if:type,select,radio,checkbox', 'array', 'list', 'max:'.config('limits.options_per_field')],
+            'options.*.value' => ['required_with:options', 'string', 'max:255', 'distinct:strict'],
+            'options.*.label' => ['required_with:options', 'string', 'max:255'],
         ];
     }
 

@@ -26,10 +26,10 @@ async function ensureCanCreate() {
     }
 
     const role = user.role
-    roleAllowed.value = role === 'manager' || role === 'admin'
+    roleAllowed.value = ['manager', 'admin', 'admin-sistema'].includes(role)
 
     if (!roleAllowed.value) {
-      errorMessage.value = 'Você não tem permissão para criar formulários (apenas manager/admin).'
+      errorMessage.value = 'Você não tem permissão para criar formulários (manager/admin/admin-sistema).'
     }
   } catch {
     await router.replace('/login')

@@ -3,6 +3,7 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\FormSubmission;
+use App\Models\FormVersion;
 use App\Repositories\Contracts\FormSubmissionRepositoryInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -51,7 +52,7 @@ class FormSubmissionRepository implements FormSubmissionRepositoryInterface
         }
         $this->applyDateFilters($query, $filters);
 
-        return $query->orderByDesc('submitted_at')->paginate($perPage);
+        return $query->orderByDesc($status === 'draft' ? 'created_at' : 'submitted_at')->orderByDesc('id')->paginate($perPage);
     }
 
     public function listDrafts(int $tenantId, int $userId, int $formId): Collection
@@ -62,6 +63,7 @@ class FormSubmissionRepository implements FormSubmissionRepositoryInterface
             ->where('submitted_by', $userId)
             ->whereHas('version', fn ($query) => $query->where('form_id', $formId))
             ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->get();
     }
 
@@ -74,10 +76,9 @@ class FormSubmissionRepository implements FormSubmissionRepositoryInterface
             ->first();
     }
 
-    public function listForExport(int $tenantId, int $formId, array $filters): Collection
+    public function selectForExport(int $tenantId, int $formId, array $filters, int $limit): array
     {
         $query = FormSubmission::query()
-            ->with(['version.fields', 'values', 'submitter'])
             ->where('tenant_id', $tenantId)
             ->where('status', 'submitted')
             ->whereHas('version', fn ($q) => $q->where('form_id', $formId));
@@ -87,16 +88,55 @@ class FormSubmissionRepository implements FormSubmissionRepositoryInterface
         }
         $this->applyDateFilters($query, $filters);
 
-        return $query->orderByDesc('submitted_at')->get();
+        $rows = $query->orderByDesc('submitted_at')->orderByDesc('id')->limit($limit)
+            ->toBase()->get(['id', 'form_version_id']);
+
+        return ['ids' => $rows->pluck('id')->all(), 'version_ids' => $rows->pluck('form_version_id')->unique()->values()->all()];
+    }
+
+    public function versionsForExport(int $tenantId, int $formId, array $versionIds): Collection
+    {
+        return FormVersion::query()->where('form_id', $formId)->whereIn('id', $versionIds)
+            ->whereHas('form', fn ($query) => $query->where('tenant_id', $tenantId))
+            ->with(['fields' => fn ($query) => $query->select(['id', 'form_version_id', 'name', 'label', 'order'])->orderBy('order')->orderBy('id')])
+            ->orderByDesc('version_number')->get();
+    }
+
+    public function iterateForExport(int $tenantId, int $formId, array $ids, int $chunkSize): iterable
+    {
+        $versions = [];
+        foreach (array_chunk($ids, $chunkSize) as $chunk) {
+            $rows = FormSubmission::query()->where('tenant_id', $tenantId)->where('status', 'submitted')
+                ->whereIn('id', $chunk)->whereHas('version', fn ($query) => $query->where('form_id', $formId))
+                ->with(['values', 'submitter'])->get()->keyBy('id');
+            foreach ($chunk as $id) {
+                if ($rows->has($id)) {
+                    $row = $rows->get($id);
+                    $versionId = $row->form_version_id;
+                    if (! isset($versions[$versionId])) {
+                        if (count($versions) >= 2) {
+                            unset($versions[array_key_first($versions)]);
+                        }
+                        $versions[$versionId] = FormVersion::query()->where('form_id', $formId)->where('id', $versionId)
+                            ->with('fields')->firstOrFail();
+                    }
+                    $row->setRelation('version', $versions[$versionId]);
+                    yield $row;
+                    // Release the row's reference; retain at most two complete version schemas.
+                    $row->unsetRelation('version');
+                }
+            }
+        }
     }
 
     private function applyDateFilters(Builder $query, array $filters): void
     {
+        $dateColumn = ($filters['status'] ?? '') === 'draft' ? 'created_at' : 'submitted_at';
         if (! empty($filters['date_from'])) {
-            $query->whereDate('submitted_at', '>=', $filters['date_from']);
+            $query->whereDate($dateColumn, '>=', $filters['date_from']);
         }
         if (! empty($filters['date_to'])) {
-            $query->whereDate('submitted_at', '<=', $filters['date_to']);
+            $query->whereDate($dateColumn, '<=', $filters['date_to']);
         }
     }
 }

@@ -13,6 +13,6 @@ class UpdateDraftRequest extends SaveDraftRequest
 
     public function rules(): array
     {
-        return [...parent::rules(), 'values' => ['present', 'array'], 'version_id' => ['prohibited']];
+        return [...parent::rules(), 'values' => ['present', 'array', 'max:'.config('limits.fields_per_version')], 'version_id' => ['prohibited']];
     }
 }

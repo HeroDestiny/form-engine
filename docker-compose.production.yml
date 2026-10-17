@@ -1,0 +1,138 @@
+name: form-engine-production
+
+x-runtime: &runtime
+  image: form-engine-production-backend:${RELEASE_TAG:?Define RELEASE_TAG}
+  build:
+    context: ./backend
+    dockerfile: ../docker/backend/Dockerfile
+    target: production
+  environment:
+    APP_ENV: production
+    APP_DEBUG: "false"
+    APP_KEY: ${APP_KEY:?Define APP_KEY}
+    APP_URL: ${APP_URL:?Define APP_URL with HTTPS}
+    LOG_CHANNEL: stderr
+    LOG_LEVEL: warning
+    DB_CONNECTION: pgsql
+    DB_HOST: postgres
+    DB_PORT: 5432
+    PGCONNECT_TIMEOUT: 3
+    DB_DATABASE: ${DB_DATABASE:?Define DB_DATABASE}
+    DB_USERNAME: ${DB_USERNAME:?Define DB_USERNAME}
+    DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD}
+    CACHE_STORE: redis
+    REDIS_HOST: redis
+    REDIS_PASSWORD: ${REDIS_PASSWORD:?Define REDIS_PASSWORD}
+    REDIS_MAX_RETRIES: 1
+    REDIS_TIMEOUT: 1
+    REDIS_READ_TIMEOUT: 1
+    SESSION_DRIVER: redis
+    SESSION_SECURE_COOKIE: "true"
+    QUEUE_CONNECTION: sync
+    SANCTUM_EXPIRATION: ${SANCTUM_EXPIRATION:-60}
+    LOGIN_ATTEMPTS_PER_MINUTE: ${LOGIN_ATTEMPTS_PER_MINUTE:-5}
+    TRUSTED_PROXIES: ${PROXY_ADDRESS:-172.30.240.2}
+    EXPORT_MAX_ROWS: ${EXPORT_MAX_ROWS:-10000}
+    EXPORT_MAX_BYTES: ${EXPORT_MAX_BYTES:-26214400}
+  networks: [private]
+  restart: unless-stopped
+  security_opt: [no-new-privileges:true]
+  logging: &logging
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  backend:
+    <<: *runtime
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, php, artisan, app:health, --quiet]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  nginx:
+    environment:
+      NGINX_PROXY_ADDRESS: ${PROXY_ADDRESS:-172.30.240.2}
+    image: form-engine-production-web:${RELEASE_TAG:?Define RELEASE_TAG}
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile.production
+    ports: ["127.0.0.1:${HTTP_PORT:-8080}:80"]
+    depends_on:
+      backend: {condition: service_healthy}
+    networks:
+      private:
+        ipv4_address: ${PROXY_ADDRESS:-172.30.240.2}
+      edge: {}
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: [CMD, wget, --quiet, --tries=1, --spider, http://127.0.0.1/up]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:?Define DB_DATABASE}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Define POSTGRES_ADMIN_PASSWORD}
+      DB_USERNAME: ${DB_USERNAME:?Define DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD}
+    volumes:
+      - production-postgres:/var/lib/postgresql/data
+      - ./docker/ops/init-app-user.sh:/docker-entrypoint-initdb.d/10-app-user.sh:ro
+    networks: [private]
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: redis:7.4.11-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Define REDIS_PASSWORD}
+    command: [sh, -c, 'exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction']
+    volumes: [production-redis:/data]
+    networks: [private]
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -qx PONG']
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  backup:
+    image: postgres:17.11-alpine
+    profiles: [ops]
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${DB_DATABASE:?Define DB_DATABASE}
+      PGUSER: ${DB_USERNAME:?Define DB_USERNAME}
+      PGPASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD}
+    volumes:
+      - ./docker/ops:/ops:ro
+      - ./backups:/backups
+    networks: [private]
+    entrypoint: [sh, /ops/backup.sh]
+
+networks:
+  private:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${PRIVATE_SUBNET:-172.30.240.0/24}
+          ip_range: ${PRIVATE_DYNAMIC_RANGE:-172.30.240.128/25}
+  edge: {}
+volumes:
+  production-postgres:
+  production-redis:

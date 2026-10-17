@@ -44,7 +44,7 @@ async function loadExportContext() {
     const me = await getCurrentUser()
     const role = me?.data?.user?.role
 
-    state.canExport = ['manager', 'admin'].includes(role)
+    state.canExport = ['manager', 'admin', 'admin-sistema'].includes(role)
 
     if (!state.canExport) {
       return
