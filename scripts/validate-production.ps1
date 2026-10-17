@@ -14,6 +14,8 @@ function Invoke-ValidationCompose {
 }
 Push-Location $taskRoot
 try {
+    # Create the bind-mount directory as the runner user, before Docker can create it as root.
+    [IO.Directory]::CreateDirectory((Join-Path $taskRoot 'backups')) | Out-Null
     $taskKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
     $taskSecrets = 1..3 | ForEach-Object { [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(24)) }
     $taskEnv = @('APP_URL=https://validation.example.test', "APP_KEY=base64:$taskKey", 'DB_DATABASE=form_engine_validation',
@@ -66,13 +68,14 @@ try {
     # This script owns only this generated project, env file and synthetic backup.
     if ($taskProject -notmatch '^form-engine-validation-[a-f0-9]{32}$') { throw 'Projeto de limpeza inválido.' }
     & docker compose --env-file $taskEnvFile -p $taskProject -f docker-compose.production.yml down --volumes
-    if (Test-Path -LiteralPath $taskEnvFile) { Remove-Item -LiteralPath $taskEnvFile }
+    # PowerShell treats dotfiles as hidden on Linux; deleting them requires Force.
+    if (Test-Path -LiteralPath $taskEnvFile) { Remove-Item -LiteralPath $taskEnvFile -Force }
     if ($taskBackup -and $taskBackup -match '^form-engine-[a-zA-Z0-9_-]+\.dump$') {
         foreach ($suffix in @('', '.sha256')) {
             $taskBackupPath = [IO.Path]::GetFullPath((Join-Path $taskRoot "backups/$taskBackup$suffix"))
             $taskExpectedParent = [IO.Path]::GetFullPath((Join-Path $taskRoot 'backups'))
             if ([IO.Path]::GetDirectoryName($taskBackupPath) -ne $taskExpectedParent) { throw 'Caminho de limpeza inválido.' }
-            if (Test-Path -LiteralPath $taskBackupPath) { Remove-Item -LiteralPath $taskBackupPath }
+            if (Test-Path -LiteralPath $taskBackupPath) { Remove-Item -LiteralPath $taskBackupPath -Force }
         }
     }
     Pop-Location
