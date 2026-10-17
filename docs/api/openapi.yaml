@@ -11,7 +11,11 @@ info:
     - Sistema de permissões baseado em papéis (RBAC)
     - Auditoria completa de ações
     - Exportação de dados em CSV
-    - Requisições limitadas a 2 MiB (413 em envelope JSON); limites detalhados em docs/consolidacao-backend.md
+    - Requisições limitadas a 2 MiB (413 em envelope JSON); limites detalhados em docs/api/README.md
+    - JSON malformado ou raiz escalar/lista não vazia retorna 400; caracteres NUL em valores ou chaves retornam 422
+    - Datas de calendário usam anos de 0001 a 9999; conflitos de unicidade conhecidos retornam 422 mesmo sob concorrência
+    - Erros HTTP da API usam o envelope padrão, preservando status e cabeçalhos; erros internos não expõem detalhes
+    - Logout registra LOGOUT e revoga o token na mesma transação
 
     ## Autenticação
     Todas as rotas protegidas requerem token Bearer emitido pelo Laravel Sanctum.
@@ -31,9 +35,9 @@ servers:
   - url: http://localhost:8000/api
     description: Desenvolvimento local
   - url: https://staging.formengine.com/api
-    description: Ambiente de staging
+    description: Exemplo de URL de staging; ambiente não provisionado
   - url: https://api.formengine.com/api
-    description: Produção
+    description: Exemplo de URL de produção; ambiente não provisionado
 
 tags:
   - name: Autenticação
@@ -84,9 +88,12 @@ paths:
                 password:
                   type: string
                   format: password
+                  maxLength: 72
+                  description: Máximo de 72 bytes UTF-8, sem caracteres nulos (limite do bcrypt).
                   example: senha123
                 tenant_slug:
                   type: string
+                  maxLength: 100
                   description: Obrigatório quando o mesmo e-mail existir em múltiplos tenants
                   pattern: '^[a-z0-9-]+$'
                   example: prefeitura-exemplo
@@ -223,6 +230,7 @@ paths:
                   example: Prefeitura Municipal de Exemplo
                 slug:
                   type: string
+                  maxLength: 100
                   pattern: '^[a-z0-9-]+$'
                   example: prefeitura-exemplo
       responses:
@@ -373,6 +381,8 @@ paths:
                   type: string
                   format: password
                   minLength: 8
+                  maxLength: 72
+                  description: Mínimo de 8 caracteres e máximo de 72 bytes UTF-8, sem caracteres nulos.
                   example: senha123
                 role:
                   type: string
@@ -1017,13 +1027,11 @@ paths:
           schema:
             type: integer
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
-              required:
-                - values
               properties:
                 values:
                   type: object
@@ -1121,13 +1129,11 @@ paths:
           schema:
             type: integer
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
-              required:
-                - values
               properties:
                 values:
                   type: object
@@ -1170,7 +1176,7 @@ paths:
     patch:
       tags: [Submissões]
       summary: Atualizar rascunho existente
-      description: Apenas o proprietário pode alterar o rascunho. Substitui todos os valores, mantém o ID e a versão original. Um objeto vazio limpa os valores. version_id não é permitido.
+      description: Apenas o proprietário pode alterar o rascunho. O campo values é obrigatório e substitui todas as respostas, mantendo ID e versão original. Envie values como objeto vazio para limpar; omitir values recebe 422. version_id não é permitido.
       operationId: updateDraft
       security: [{bearerAuth: []}]
       requestBody:
@@ -1648,6 +1654,7 @@ components:
           example: Prefeitura Municipal de Exemplo
         slug:
           type: string
+          maxLength: 100
           example: prefeitura-exemplo
         is_active:
           type: boolean
@@ -1959,7 +1966,18 @@ components:
                     items: {type: string}
               value_label:
                 type: string
+                nullable: true
                 description: Label da option (para select/radio)
+              value_labels:
+                type: array
+                description: Labels das opções selecionadas em checkbox, preservando a ordem dos valores
+                items:
+                  type: string
+              value_formatted:
+                type: string
+                nullable: true
+                description: Data no formato dd/mm/aaaa; o valor original permanece em value
+                example: 17/10/2026
               is_required:
                 type: boolean
 

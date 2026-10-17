@@ -1,10 +1,6 @@
-# Casos de Uso — Form Engine
+# Casos de uso
 
-Este diretório contém a especificação detalhada de todos os casos de uso do Form Engine, organizados por categoria.
-
----
-
-## 📂 Estrutura de Organização
+Os 21 casos de uso descrevem o escopo funcional e as regras de negócio da v1. Os exemplos de implementação e interface nos documentos são ilustrativos; payloads e rotas atuais estão no [guia da API](../api/README.md) e no [OpenAPI](../api/openapi.yaml).
 
 ### 01. Gestão de Tenants
 - [UC01 - Criar Tenant](01-gestao-tenants/UC01-criar-tenant.md)
@@ -41,148 +37,12 @@ Este diretório contém a especificação detalhada de todos os casos de uso do 
 - [UC20 - Autenticar no Sistema](07-autenticacao/UC20-autenticar.md)
 - [UC21 - Verificar Permissões de Acesso](07-autenticacao/UC21-verificar-permissoes.md)
 
----
+## Regras transversais
 
-## 👥 Atores do Sistema
+- Recursos comuns permanecem restritos ao tenant. Admin-sistema herda permissões de admin no próprio tenant; apenas a gestão de tenants é global.
+- Versão publicada não é alterada nos fluxos da aplicação; há no máximo uma versão draft por formulário. Rascunhos de preenchimento podem ser múltiplos e só o proprietário pode editá-los/finalizá-los.
+- Auditoria é automática, imutável e transacional nas mutações. Logs não armazenam credenciais nem respostas dos formulários.
+- Entradas e regras de negócio são validadas; recusas usam o envelope da API. Autenticação usa tokens com expiração e limitação de login.
+- Mudanças funcionais devem verificar sucesso, validação, isolamento e permissões, além de atomicidade e concorrência quando pertinentes. Consulte [testes](../testes.md).
 
-### Administrador do Sistema
-Responsável pela gestão global do sistema, criação de tenants e configurações gerais.
-
-### Administrador do Tenant
-Usuário com papel `admin` dentro de uma unidade administrativa, responsável por gerenciar usuários e configurações do tenant.
-
-### Gestor (Manager)
-Usuário com papel `manager`, responsável por criar, versionar e publicar formulários dentro de seu tenant.
-
-### Usuário Final
-Usuário com papel `user`, responsável por preencher e submeter formulários.
-
-### Sistema
-Responsável por auditoria automática, validações e processamento de dados.
-
----
-
-## 📊 Matriz de Casos de Uso por Ator
-
-| Caso de Uso | Admin Sistema | Admin Tenant | Manager | User |
-|-------------|---------------|--------------|---------|------|
-| UC01 - Criar Tenant | ✓ | | | |
-| UC02 - Ativar/Desativar Tenant | ✓ | | | |
-| UC03 - Criar Usuário | | ✓ | | |
-| UC04 - Ativar/Desativar Usuário | | ✓ | | |
-| UC05 - Criar Formulário | | ✓ | ✓ | |
-| UC06 - Adicionar Campos | | ✓ | ✓ | |
-| UC07 - Editar Campos | | ✓ | ✓ | |
-| UC08 - Remover Campo | | ✓ | ✓ | |
-| UC09 - Publicar Versão | | ✓ | ✓ | |
-| UC10 - Criar Nova Versão | | ✓ | ✓ | |
-| UC11 - Ativar/Desativar Formulário | | ✓ | ✓ | |
-| UC12 - Listar Formulários | | ✓ | ✓ | ✓ |
-| UC13 - Preencher Formulário | | ✓ | ✓ | ✓ |
-| UC14 - Salvar Rascunho | | ✓ | ✓ | ✓ |
-| UC15 - Consultar Submissões | | ✓ | ✓ | (próprias) |
-| UC16 - Visualizar Submissão | | ✓ | ✓ | (próprias) |
-| UC17 - Exportar Dados | | ✓ | ✓ | |
-| UC18 - Consultar Auditoria | | ✓ | | |
-| UC19 - Visualizar Ação Auditada | | ✓ | | |
-| UC20 - Autenticar | ✓ | ✓ | ✓ | ✓ |
-| UC21 - Verificar Permissões | Sistema | Sistema | Sistema | Sistema |
-
----
-
-## 🎯 Regras de Negócio Transversais
-
-### Isolamento Multi-Tenant
-- **RN01:** Todos os dados principais devem ter `tenant_id`
-- **RN02:** Usuário nunca acessa dados de outro tenant
-- **RN03:** Queries devem sempre filtrar por tenant ativo
-- **RN04:** Validação de tenant é obrigatória em cada operação
-
-### Versionamento
-- **RN05:** Versão publicada é imutável
-- **RN06:** Apenas uma versão draft por formulário
-- **RN07:** Submissions sempre vinculadas a versão específica
-- **RN08:** Nova versão copia estrutura da anterior
-
-### Auditoria
-- **RN09:** Todas ações relevantes devem ser auditadas
-- **RN10:** Logs são imutáveis
-- **RN11:** Auditoria inclui: tenant, usuário, ação, entidade, timestamp
-
-### Validação
-- **RN12:** Validação de entrada via Form Requests
-- **RN13:** Validação de negócio na camada Service
-- **RN14:** Mensagens de erro devem ser claras e padronizadas
-
-### Segurança
-- **RN15:** Senhas devem ser hasheadas (bcrypt)
-- **RN16:** Tokens de autenticação com expiração
-- **RN17:** Rate limiting para APIs sensíveis
-- **RN18:** Sanitização de inputs obrigatória
-
----
-
-## 🔮 Casos de Uso Futuros (Fora do Escopo v1)
-
-### Gestão Avançada
-- Hierarquia de tenants (estadual → municipal)
-- Permissões granulares por recurso
-- Workflows de aprovação de formulários
-- Templates de formulários
-
-### Colaboração
-- Compartilhamento de formulários entre tenants
-- Comentários em submissões
-- Histórico de revisões de campos
-
-### Análise e Relatórios
-- Dashboard analítico
-- Gráficos e indicadores
-- Relatórios customizados
-- Alertas e notificações
-
-### Integrações
-- Webhooks para eventos
-- API de importação em lote
-- Integração com sistemas externos
-- SSO institucional
-
----
-
-## 📝 Padrão de Resposta da API
-
-Todos os casos de uso seguirão o padrão de resposta:
-
-```json
-{
-  "success": true,
-  "data": {},
-  "message": "Operação realizada com sucesso",
-  "errors": null
-}
-```
-
-### Tratamento de Erros
-
-Exceções específicas por tipo de erro:
-- `ValidationException`: Erros de validação de entrada
-- `BusinessException`: Regras de negócio violadas
-- `NotFoundException`: Recurso não encontrado
-- `UnauthorizedException`: Sem permissão
-- `TenantMismatchException`: Violação de isolamento
-
----
-
-## ✅ Testes Obrigatórios
-
-Cada caso de uso deve ter:
-- Teste de sucesso (caminho feliz)
-- Testes de validação (entradas inválidas)
-- Testes de isolamento (tentativa de acesso cross-tenant)
-- Testes de permissão (verificação de papéis)
-
----
-
-**Versão:** 1.0
-**Data:** 2026-03-22
-**Base:** Documentação de Visão, Arquitetura e Modelo de Dados
+Funcionalidades indicadas como futuras ou fora da v1 nos documentos não integram o escopo atual.

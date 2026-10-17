@@ -50,7 +50,7 @@ class UserRepository implements UserRepositoryInterface
         return User::query()
             ->with('tenant')
             ->where('email', $email)
-            ->when($tenantSlug, fn ($query) => $query->whereHas('tenant', fn ($tenantQuery) => $tenantQuery->where('slug', $tenantSlug)))
+            ->when($tenantSlug !== null && $tenantSlug !== '', fn ($query) => $query->whereHas('tenant', fn ($tenantQuery) => $tenantQuery->where('slug', $tenantSlug)))
             ->get();
     }
 

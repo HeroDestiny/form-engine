@@ -1,0 +1,32 @@
+name: form-engine-restore-check
+services:
+  restore-db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: form_engine_restore_check
+      POSTGRES_USER: restore_check
+      POSTGRES_PASSWORD: restore_check_only
+    tmpfs: [/var/lib/postgresql/data]
+    networks: [isolated]
+    healthcheck:
+      test: [CMD, pg_isready, -U, restore_check, -d, form_engine_restore_check]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+  verify:
+    image: postgres:17.11-alpine
+    depends_on:
+      restore-db: {condition: service_healthy}
+    environment:
+      PGHOST: restore-db
+      PGDATABASE: form_engine_restore_check
+      PGUSER: restore_check
+      PGPASSWORD: restore_check_only
+      BACKUP_FILE: ${BACKUP_FILE:?Define backup filename inside backups directory}
+    volumes:
+      - ./backups:/backups:ro
+      - ./docker/ops:/ops:ro
+    networks: [isolated]
+    entrypoint: [sh, /ops/verify-restore.sh]
+networks:
+  isolated: {internal: true}

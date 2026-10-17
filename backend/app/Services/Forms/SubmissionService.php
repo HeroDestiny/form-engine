@@ -12,7 +12,9 @@ use App\Repositories\Contracts\FormRepositoryInterface;
 use App\Repositories\Contracts\FormSubmissionRepositoryInterface;
 use App\Repositories\Contracts\FormSubmissionValueRepositoryInterface;
 use App\Repositories\Contracts\FormVersionRepositoryInterface;
+use App\Rules\CalendarDate;
 use App\Services\AuditRecorder;
+use DateTimeImmutable;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -58,7 +60,7 @@ class SubmissionService
                 $fieldRules[] = 'max:254';
             }
             if ($field->type === 'date') {
-                $fieldRules[] = 'date_format:Y-m-d';
+                $fieldRules[] = new CalendarDate;
             }
             if (in_array($field->type, ['select', 'radio'], true) && is_array($field->options)) {
                 $fieldRules[] = Rule::in(array_column($field->options, 'value'));
@@ -234,8 +236,14 @@ class SubmissionService
             ];
 
             if (in_array($field->type, ['select', 'radio'], true) && is_array($field->options)) {
-                $selected = collect($field->options)->firstWhere('value', $value);
-                $item['value_label'] = $selected['label'] ?? $value;
+                $item['value_label'] = SubmissionFieldValue::label($field, $value);
+            }
+            if ($field->type === 'checkbox') {
+                $item['value_labels'] = array_map(fn ($choice) => SubmissionFieldValue::label($field, $choice), $value ?? []);
+            }
+            if ($field->type === 'date') {
+                $date = $value === null ? false : DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+                $item['value_formatted'] = $date && $date->format('Y-m-d') === $value ? $date->format('d/m/Y') : $value;
             }
 
             return $item;

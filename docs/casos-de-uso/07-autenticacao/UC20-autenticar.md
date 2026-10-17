@@ -116,7 +116,8 @@ Permite autenticação de usuários no sistema, validando credenciais e gerando 
 | Campo | Tipo | Obrigatório | Validação |
 |-------|------|-------------|-----------|
 | email | string | Sim | Formato de e-mail válido |
-| password | string | Sim | Min: 1 caractere |
+| password | string | Sim | Min: 1 caractere, máximo 72 bytes UTF-8, sem caracteres nulos |
+| tenant_slug | string | Condicional | Máximo 100 caracteres; obrigatório para e-mail repetido entre tenants; `0` é um slug válido e respeitado |
 | remember | boolean | Não | Estender validade do token (futuro) |
 
 ---

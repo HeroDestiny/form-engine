@@ -25,12 +25,23 @@ class ListAuditLogsRequest extends PaginatedQueryRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            if (! $this->filled('date_from') || ! $this->filled('date_to')
-                || $validator->errors()->has('date_from') || $validator->errors()->has('date_to')) {
+            $dates = [];
+            foreach (['date_from', 'date_to'] as $field) {
+                if (! $this->filled($field) || $validator->errors()->has($field)) {
+                    continue;
+                }
+                $date = CarbonImmutable::parse($this->input($field), 'UTC')->utc();
+                if ($date->year < 1 || $date->year > 9999) {
+                    $validator->errors()->add($field, 'A data em UTC deve estar entre os anos 0001 e 9999.');
+                } else {
+                    $dates[$field] = $date;
+                }
+            }
+            if (! isset($dates['date_from'], $dates['date_to'])) {
                 return;
             }
-            $from = CarbonImmutable::parse($this->input('date_from'), 'UTC')->utc();
-            $to = CarbonImmutable::parse($this->input('date_to'), 'UTC')->utc();
+            $from = $dates['date_from'];
+            $to = $dates['date_to'];
             if (strlen($this->input('date_to')) === 10) {
                 $to = $to->endOfDay();
             }

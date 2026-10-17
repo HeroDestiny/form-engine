@@ -85,9 +85,9 @@ Permite ao usuário salvar parcialmente o preenchimento de um formulário como r
 
 - **RN01:** Rascunho não precisa validação completa
 - **RN02:** Campos obrigatórios NÃO são validados no rascunho
-- **RN03:** Apenas validação de tipo é aplicada
+- **RN03:** Valores fornecidos validam tipo, opções cadastradas, calendário e limites; a ausência de resposta obrigatória é permitida no rascunho
 - **RN04:** Usuário pode ter múltiplos rascunhos do mesmo formulário (v1)
-- **RN05:** Rascunho não aparece em consultas de submissões finalizadas
+- **RN05:** Rascunho não aparece em consultas com `status=submitted` nem no CSV; consultas com `status=draft` podem incluí-lo conforme as permissões
 - **RN06:** Rascunho pode ser convertido em submissão final
 - **RN07:** Rascunho expira após X dias (opcional, fora do escopo v1)
 
@@ -103,6 +103,16 @@ Permite ao usuário salvar parcialmente o preenchimento de um formulário como r
 | Visível em consultas | Não | Sim |
 | Pode editar | Sim | Não (v1) |
 | Aparece em relatórios | Não | Sim |
+
+## Contrato implementado — 17/10/2026
+
+`POST /api/forms/{formId}/drafts` cria um novo rascunho e permite múltiplos por usuário. `values` é opcional nessa criação; `version_id` opcional seleciona uma versão publicada do formulário, usando a última publicada quando omitido.
+
+`PATCH /api/forms/{formId}/drafts/{submissionId}` substitui todas as respostas do rascunho existente. Exige `values`; `{"values": {}}` limpa as respostas e um body `{}` recebe 422. `version_id` é proibido. Somente o proprietário pode editar, mantendo ID e versão original.
+
+`POST /api/forms/{formId}/drafts/{submissionId}/submit` exige `values` completo, valida obrigatórios da versão original e finaliza com o mesmo ID. Outro tenant/proprietário recebe 404. Edição e finalização retornam 200; falhas não deixam alterações parciais. A consulta padrão pode incluir rascunhos; use o filtro de status para separar finais e rascunhos.
+
+Os trechos de interface e código abaixo são exemplos conceituais do planejamento; o contrato HTTP atual está no [guia da API](../../api/README.md).
 
 ---
 
@@ -389,7 +399,7 @@ ADD COLUMN status VARCHAR(20) DEFAULT 'submitted';
 ### Query para Rascunhos do Usuário
 
 ```php
-FormSubmission::where('form_id', $formId)
+FormSubmission::whereHas('version', fn ($query) => $query->where('form_id', $formId))
     ->where('submitted_by', auth()->id())
     ->where('status', 'draft')
     ->with('values.field')

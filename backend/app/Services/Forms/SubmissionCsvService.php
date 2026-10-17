@@ -94,17 +94,11 @@ class SubmissionCsvService
         if ($field->type === 'checkbox') {
             $choices = SubmissionFieldValue::decode($field, $value) ?? [];
 
-            return implode('; ', array_map(function ($choice) use ($field) {
-                $selected = collect($field->options)->firstWhere('value', $choice);
-
-                return $selected['label'] ?? $choice;
-            }, $choices));
+            return implode('; ', array_map(fn ($choice) => SubmissionFieldValue::label($field, $choice), $choices));
         }
 
         if (in_array($field->type, ['select', 'radio'], true) && is_array($field->options)) {
-            $selected = collect($field->options)->firstWhere('value', $value);
-
-            return $selected['label'] ?? $value;
+            return SubmissionFieldValue::label($field, $value);
         }
 
         return $value;

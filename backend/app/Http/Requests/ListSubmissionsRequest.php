@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\CalendarDate;
+
 class ListSubmissionsRequest extends PaginatedQueryRequest
 {
     public function rules(): array
@@ -12,8 +14,8 @@ class ListSubmissionsRequest extends PaginatedQueryRequest
             'form_id' => $this->identifierRules(),
             'version_id' => $this->identifierRules(),
             'user_id' => $this->identifierRules(),
-            'date_from' => ['nullable', 'date_format:Y-m-d'],
-            'date_to' => ['nullable', 'date_format:Y-m-d', ...($this->filled('date_from') ? ['after_or_equal:date_from'] : [])],
+            'date_from' => ['nullable', new CalendarDate],
+            'date_to' => ['nullable', new CalendarDate, ...($this->filled('date_from') ? ['after_or_equal:date_from'] : [])],
         ];
     }
 }

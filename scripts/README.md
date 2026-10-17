@@ -2,6 +2,8 @@
 
 Este diretório contém scripts utilitários para facilitar o desenvolvimento.
 
+Para operação em produção (PowerShell 7), use `ops.ps1 -Action preflight|health|backup|restore-check`. O ensaio `validate-production.ps1` constrói e valida uma stack descartável, testa backup/restauração e indisponibilidade/recuperação do Redis e remove apenas os recursos que criou. Consulte [operação em produção](../docs/operacao-producao.md) para configuração e comandos completos.
+
 ## dev.ps1
 
 Script principal para gerenciar o ambiente de desenvolvimento.

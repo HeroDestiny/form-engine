@@ -157,4 +157,4 @@ O projeto será considerado bem-sucedido quando:
 
 ## 12. Estado Atual
 
-**v1 em estabilização** — Backend e frontend SPA funcionais. Camadas Controller → Service → Repository, Form Requests, auditoria automática, edição/finalização de rascunhos, preservação de versões e exportação CSV foram consolidados. A suíte possui perfis isolados para SQLite e PostgreSQL. As pendências de aceitação e operação estão descritas em `arquitetura.md` e `avaliacao-testes.md`.
+**v1 em estabilização** — Backend e frontend SPA funcionais. Autenticação, permissões, auditoria, versionamento, rascunhos e CSV implementados. Consulte a [arquitetura](arquitetura.md), o [guia de testes](testes.md) e a [operação](operacao-producao.md). Não existe produção publicada.

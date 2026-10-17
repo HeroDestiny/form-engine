@@ -23,7 +23,7 @@ jobs:
             phpunit: phpunit.postgres.xml
     services:
       postgres-test:
-        image: postgres:17.2-alpine
+        image: postgres:17.11-alpine
         env:
           POSTGRES_DB: form_engine_testing
           POSTGRES_USER: form_engine_testing
@@ -64,6 +64,9 @@ jobs:
       - name: Check code style
         run: ./vendor/bin/pint --test
 
+      - name: Audit backend runtime dependencies
+        run: composer audit --locked --no-dev
+
       - name: Run backend tests
         run: php vendor/bin/phpunit --configuration=${{ matrix.phpunit }}
 
@@ -91,3 +94,17 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+
+  production:
+    name: Production images and restore rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate isolated production stack and database recovery
+        shell: pwsh
+        run: ./scripts/validate-production.ps1
