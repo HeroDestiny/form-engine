@@ -1,35 +1,42 @@
+import { getAuthToken, setAuthToken, clearAuthToken } from './auth/token.js';
+import { csvDataRows } from './utils/csv.js';
+
 const API_BASE = '/api';
 
-function getAuthToken() {
-  return window.localStorage.getItem('fe_token') ?? '';
+async function responseError(response, token, authenticated) {
+  if (response.status === 401 && authenticated) clearAuthToken('expired', token);
+  const isJson = response.headers.get('content-type')?.includes('application/json');
+  const body = isJson ? await response.json().catch(() => null) : null;
+  const error = new Error(body?.message || 'Não foi possível comunicar com o servidor. Tente novamente.');
+  error.status = response.status;
+  error.body = body;
+  return error;
 }
 
 export async function apiRequest(path, options = {}) {
   const headers = new Headers(options.headers || {});
 
   headers.set('Content-Type', 'application/json');
+  headers.set('Accept', 'application/json');
 
   const token = getAuthToken();
-  if (token) {
+  const authenticated = path !== '/auth/login';
+  if (token && authenticated) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
+    signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
     headers,
   });
 
-  const isJson = response.headers.get('content-type')?.includes('application/json');
-  const body = isJson ? await response.json() : null;
-
   if (!response.ok) {
-    const error = new Error(body?.message || 'Erro ao comunicar com a API');
-    error.status = response.status;
-    error.body = body;
-    throw error;
+    throw await responseError(response, token, authenticated);
   }
 
-  return body;
+  const isJson = response.headers.get('content-type')?.includes('application/json');
+  return isJson ? response.json() : null;
 }
 
 export async function login({ email, password, tenantSlug }) {
@@ -45,20 +52,25 @@ export async function login({ email, password, tenantSlug }) {
 
   const token = data?.data?.token;
   if (token) {
-    window.localStorage.setItem('fe_token', token);
+    setAuthToken(token);
+  } else {
+    throw new Error('O servidor não retornou uma sessão válida. Tente novamente.');
   }
 
   return data;
 }
 
 export async function logout() {
+  const token = getAuthToken();
+  clearAuthToken('logout', token);
   try {
-    await apiRequest('/auth/logout', { method: 'POST' });
+    if (token) await fetch(`${API_BASE}/auth/logout`, {
+      signal: AbortSignal.timeout(15000),
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
   } catch {
     // Mesmo que o token já tenha expirado ou a API esteja indisponível,
     // o logout local deve sempre ser concluído.
-  } finally {
-    window.localStorage.removeItem('fe_token');
   }
 }
 
@@ -66,12 +78,21 @@ export function getCurrentUser() {
   return apiRequest('/auth/me');
 }
 
-export function listForms() {
-  return apiRequest('/forms');
+function queryPath(path, params, keys) {
+  const query = new URLSearchParams()
+  for (const key of keys) {
+    const value = params[key]
+    if (value !== undefined && value !== null && value !== '') query.set(key, String(value))
+  }
+  return `${path}${query.size ? `?${query}` : ''}`
 }
 
-export function listAllForms() {
-  return apiRequest('/forms?scope=all');
+export function listForms(params = {}, options = {}) {
+  return apiRequest(queryPath('/forms', params, ['search', 'sort', 'order']), options)
+}
+
+export function listAllForms(params = {}, options = {}) {
+  return apiRequest(queryPath('/forms', { ...params, scope: 'all' }, ['scope', 'search', 'sort', 'order']), options)
 }
 
 export function getForm(formId) {
@@ -132,17 +153,17 @@ export function deleteField(formId, versionId, fieldId) {
   });
 }
 
-export function submitForm(formId, values) {
+export function submitForm(formId, values, versionId) {
   return apiRequest(`/forms/${formId}/submit`, {
     method: 'POST',
-    body: JSON.stringify({ values }),
+    body: JSON.stringify({ values, version_id: versionId }),
   });
 }
 
-export function saveDraft(formId, values) {
+export function saveDraft(formId, values, versionId) {
   return apiRequest(`/forms/${formId}/drafts`, {
     method: 'POST',
-    body: JSON.stringify({ values }),
+    body: JSON.stringify({ values, version_id: versionId }),
   });
 }
 
@@ -150,12 +171,21 @@ export function listDrafts(formId) {
   return apiRequest(`/forms/${formId}/drafts`);
 }
 
+export function updateDraft(formId, draftId, values) {
+  return apiRequest(`/forms/${formId}/drafts/${draftId}`, {
+    method: 'PATCH', body: JSON.stringify({ values }),
+  })
+}
+
+export function finalizeDraft(formId, draftId, values) {
+  return apiRequest(`/forms/${formId}/drafts/${draftId}/submit`, {
+    method: 'POST', body: JSON.stringify({ values }),
+  })
+}
+
 // Admin tenants (admin-sistema)
-export function adminListTenants(params = {}) {
-  const searchParams = new URLSearchParams()
-  if (params.per_page) searchParams.set('per_page', String(params.per_page))
-  const qs = searchParams.toString()
-  return apiRequest(`/admin/tenants${qs ? `?${qs}` : ''}`)
+export function adminListTenants(params = {}, options = {}) {
+  return apiRequest(queryPath(`/admin/tenants`, params, ['page', 'per_page']), options)
 }
 
 export function adminCreateTenant({ name, slug }) {
@@ -173,11 +203,8 @@ export function adminUpdateTenantStatus(tenantId, isActive) {
 }
 
 // Tenant users (admin do tenant)
-export function listTenantUsers(tenantId, params = {}) {
-  const searchParams = new URLSearchParams()
-  if (params.per_page) searchParams.set('per_page', String(params.per_page))
-  const qs = searchParams.toString()
-  return apiRequest(`/tenants/${tenantId}/users${qs ? `?${qs}` : ''}`)
+export function listTenantUsers(tenantId, params = {}, options = {}) {
+  return apiRequest(queryPath(`/tenants/${tenantId}/users`, params, ['page', 'per_page']), options)
 }
 
 export function createTenantUser(tenantId, { name, email, password, role }) {
@@ -195,39 +222,33 @@ export function updateTenantUserStatus(tenantId, userId, isActive) {
 }
 
 // Submissions listing and detail
-export function listSubmissions(params = {}) {
-  const searchParams = new URLSearchParams()
-  if (params.status) searchParams.set('status', params.status)
-  if (params.form_id) searchParams.set('form_id', String(params.form_id))
-  if (params.per_page) searchParams.set('per_page', String(params.per_page))
-  const qs = searchParams.toString()
-  return apiRequest(`/submissions${qs ? `?${qs}` : ''}`)
+export function listSubmissions(params = {}, options = {}) {
+  return apiRequest(queryPath(`/submissions`, params, ['page', 'per_page', 'status', 'form_id', 'version_id', 'user_id', 'date_from', 'date_to']), options)
 }
 
 export function getSubmission(submissionId) {
   return apiRequest(`/submissions/${submissionId}`)
 }
 
-export async function exportSubmissionsCsv({ form_id, version_ids, date_from, date_to }) {
+export async function exportSubmissionsCsv({ form_id, version_ids, date_from, date_to, separator }) {
+  const token = getAuthToken()
   const response = await fetch('/api/submissions/export', {
+    signal: AbortSignal.timeout(120000),
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${getAuthToken()}`,
+      Accept: 'text/csv, application/json',
+      Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ form_id, version_ids, date_from, date_to, format: 'csv' }),
+    body: JSON.stringify({ form_id, version_ids, date_from, date_to, separator, format: 'csv' }),
   })
 
   if (!response.ok) {
-    const isJson = response.headers.get('content-type')?.includes('application/json')
-    const body = isJson ? await response.json() : null
-    const error = new Error(body?.message || 'Erro ao exportar submissões')
-    error.status = response.status
-    error.body = body
-    throw error
+    throw await responseError(response, token, true)
   }
 
   const blob = await response.blob()
+  const rows = csvDataRows(await blob.text())
   const url = window.URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -236,18 +257,12 @@ export async function exportSubmissionsCsv({ form_id, version_ids, date_from, da
   a.click()
   a.remove()
   window.URL.revokeObjectURL(url)
+  return { bytes: blob.size, rows }
 }
 
 // Audit logs (admin)
-export function listAuditLogs(params = {}) {
-  const searchParams = new URLSearchParams()
-  if (params.action) searchParams.set('action', params.action)
-  if (params.user_id) searchParams.set('user_id', String(params.user_id))
-  if (params.entity_type) searchParams.set('entity_type', params.entity_type)
-  if (params.entity_id) searchParams.set('entity_id', String(params.entity_id))
-  if (params.per_page) searchParams.set('per_page', String(params.per_page))
-  const qs = searchParams.toString()
-  return apiRequest(`/audit-logs${qs ? `?${qs}` : ''}`)
+export function listAuditLogs(params = {}, options = {}) {
+  return apiRequest(queryPath(`/audit-logs`, params, ['page', 'per_page', 'action', 'user_id', 'entity_type', 'entity_id', 'date_from', 'date_to']), options)
 }
 
 export function getAuditLog(logId) {

@@ -11,15 +11,15 @@ use App\Http\Controllers\Api\TenantUserController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function (): void {
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
     Route::middleware('auth:sanctum')->group(function (): void {
-        Route::get('/me', [AuthController::class, 'me']);
+        Route::get('/me', [AuthController::class, 'me'])->middleware('tenant.active');
         Route::post('/logout', [AuthController::class, 'logout']);
     });
 });
 
-Route::middleware('auth:sanctum')->group(function (): void {
+Route::middleware(['auth:sanctum', 'tenant.active'])->group(function (): void {
     Route::prefix('admin')->middleware('role:admin-sistema')->group(function (): void {
         Route::get('/tenants', [AdminTenantController::class, 'index']);
         Route::post('/tenants', [AdminTenantController::class, 'store']);
@@ -55,4 +55,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/forms/{formId}/drafts', [SubmissionController::class, 'listDrafts']);
     Route::post('/forms/{formId}/submit', [SubmissionController::class, 'submit']);
     Route::post('/forms/{formId}/drafts', [SubmissionController::class, 'saveDraft']);
+    Route::patch('/forms/{formId}/drafts/{submissionId}', [SubmissionController::class, 'updateDraft']);
+    Route::post('/forms/{formId}/drafts/{submissionId}/submit', [SubmissionController::class, 'finalizeDraft']);
 });

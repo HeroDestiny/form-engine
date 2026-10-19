@@ -1,10 +1,14 @@
 <script setup>
 import { computed, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { session } from '../auth/session.js'
+import { formatDate } from '../utils/display.js'
 import { getSubmission } from '../api'
 
 const route = useRoute()
 const router = useRouter()
+
+const canResume = computed(() => state.submission?.submission?.status === 'draft' && String(state.submission?.user?.id) === String(session.user?.id))
 
 const submissionId = computed(() => route.params.submissionId)
 
@@ -38,49 +42,38 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="brand">
-        <span class="brand-mark">FE</span>
-        <div class="brand-text">
-          <h1>Form Engine</h1>
-          <p>Detalhe da submissão</p>
-        </div>
+  <section class="panel panel-forms">
+    <template v-if="state.loading">
+      <p class="panel-subtitle">Carregando submissão…</p>
+    </template>
+
+    <template v-else-if="state.error">
+      <p class="feedback error" role="alert">{{ state.error }}</p><button class="ghost-button" type="button" @click="loadSubmission">Tentar novamente</button>
+    </template>
+
+    <template v-else-if="state.submission">
+      <h1>{{ state.submission.form.name }}</h1>
+      <p class="panel-subtitle">
+        Versão {{ state.submission.version.version_number }} · {{ state.submission.submission.status === 'draft' ? 'Rascunho' : 'Enviada' }} · {{ formatDate(state.submission.submission.submitted_at || state.submission.submission.created_at) }}
+      </p>
+
+      <p v-if="state.submission.user" class="panel-subtitle">Usuário: {{ state.submission.user.name }} · {{ state.submission.user.email }} · ID {{ state.submission.user.id }}</p>
+      <div class="panel-actions" style="margin-bottom: 1rem;">
+        <RouterLink v-if="canResume" class="primary-button" :to="{ path: `/forms/${state.submission.form.id}/fill`, query: { draft: state.submission.submission.id, returnTo: route.fullPath } }">Retomar este rascunho</RouterLink>
+        <RouterLink class="ghost-button" :to="{ path: `/forms/${state.submission.form.id}`, query: { returnTo: route.fullPath } }">Ver formulário</RouterLink>
       </div>
+      <ul class="fields-list">
+        <li v-for="v in state.submission.values" :key="v.field_id" class="field-row">
+          <div class="field-row-main">
+            <strong>{{ v.label }}</strong>
+            <span class="field-row-meta">{{ v.value_formatted ?? v.value_label ?? (v.value_labels?.length ? v.value_labels.join('; ') : v.value === null || v.value === '' || Array.isArray(v.value) && !v.value.length ? 'Não informado' : v.value) }}</span>
+          </div>
+        </li>
+      </ul>
+    </template>
 
-      <button class="ghost-button" type="button" @click="router.push('/submissions')">Voltar</button>
-    </header>
-
-    <main class="app-main">
-      <section class="panel panel-forms">
-        <template v-if="state.loading">
-          <p class="panel-subtitle">Carregando submissão…</p>
-        </template>
-
-        <template v-else-if="state.error">
-          <p class="feedback error">{{ state.error }}</p>
-        </template>
-
-        <template v-else-if="state.submission">
-          <h2>{{ state.submission.form.name }}</h2>
-          <p class="panel-subtitle">
-            Versão {{ state.submission.version.version_number }} · status {{ state.submission.submission.status }}
-          </p>
-
-          <ul class="fields-list">
-            <li v-for="v in state.submission.values" :key="v.field_id" class="field-row">
-              <div class="field-row-main">
-                <strong>{{ v.label }}</strong>
-                <span class="field-row-meta">{{ v.value }}</span>
-              </div>
-            </li>
-          </ul>
-        </template>
-
-        <template v-else>
-          <p class="panel-subtitle">Submissão não encontrada.</p>
-        </template>
-      </section>
-    </main>
-  </div>
+    <template v-else>
+      <p class="panel-subtitle">Submissão não encontrada.</p>
+    </template>
+  </section>
 </template>

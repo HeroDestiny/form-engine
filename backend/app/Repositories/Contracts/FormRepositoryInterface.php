@@ -15,7 +15,7 @@ interface FormRepositoryInterface
 
     public function create(array $data): Form;
 
-    public function findInTenant(int $tenantId, int $formId): ?Form;
+    public function findInTenant(int $tenantId, int $formId, bool $lock = false): ?Form;
 
     public function updateStatus(Form $form, bool $isActive): Form;
 }

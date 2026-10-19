@@ -12,8 +12,29 @@ permissions:
 
 jobs:
   backend:
-    name: Backend
+    name: Backend (${{ matrix.database }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - database: SQLite
+            phpunit: phpunit.xml
+          - database: PostgreSQL
+            phpunit: phpunit.postgres.xml
+    services:
+      postgres-test:
+        image: postgres:17.11-alpine
+        env:
+          POSTGRES_DB: form_engine_testing
+          POSTGRES_USER: form_engine_testing
+          POSTGRES_PASSWORD: testing_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U form_engine_testing -d form_engine_testing"
+          --health-interval 2s --health-timeout 5s --health-retries 15
+    env:
+      TEST_PG_HOST: 127.0.0.1
 
     defaults:
       run:
@@ -27,7 +48,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, pdo_sqlite, sqlite3
+          extensions: mbstring, pdo_sqlite, sqlite3, pdo_pgsql
           coverage: none
           tools: composer:v2
 
@@ -43,8 +64,11 @@ jobs:
       - name: Check code style
         run: ./vendor/bin/pint --test
 
+      - name: Audit backend runtime dependencies
+        run: composer audit --locked --no-dev
+
       - name: Run backend tests
-        run: php artisan test
+        run: php vendor/bin/phpunit --configuration=${{ matrix.phpunit }}
 
   frontend:
     name: Frontend
@@ -70,3 +94,20 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
+      - name: Test frontend
+        run: npm test
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+
+  production:
+    name: Production images and restore rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate isolated production stack and database recovery
+        shell: pwsh
+        run: ./scripts/validate-production.ps1

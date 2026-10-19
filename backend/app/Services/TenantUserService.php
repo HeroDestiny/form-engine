@@ -8,10 +8,11 @@ use App\Models\User;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class TenantUserService
 {
-    public function __construct(private readonly UserRepositoryInterface $userRepository) {}
+    public function __construct(private readonly UserRepositoryInterface $userRepository, private readonly AuditRecorder $audit) {}
 
     public function listForTenantPaginated(int $tenantId, int $perPage = 20): LengthAwarePaginator
     {
@@ -25,14 +26,19 @@ class TenantUserService
 
     public function create(int $tenantId, string $name, string $email, string $password, string $role): User
     {
-        return $this->userRepository->create([
-            'tenant_id' => $tenantId,
-            'name' => $name,
-            'email' => $email,
-            'password' => $password,
-            'role' => $role,
-            'is_active' => true,
-        ]);
+        return DB::transaction(function () use ($tenantId, $name, $email, $password, $role) {
+            $user = $this->userRepository->create([
+                'tenant_id' => $tenantId,
+                'name' => $name,
+                'email' => $email,
+                'password' => $password,
+                'role' => $role,
+                'is_active' => true,
+            ]);
+            $this->audit->record('CREATE_USER', $tenantId, 'user', $user->id, ['role' => $role]);
+
+            return $user;
+        });
     }
 
     public function findInTenant(int $tenantId, int $userId): ?User
@@ -42,7 +48,12 @@ class TenantUserService
 
     public function updateStatus(User $user, bool $isActive): User
     {
-        return $this->userRepository->updateStatus($user, $isActive);
+        return DB::transaction(function () use ($user, $isActive) {
+            $updated = $this->userRepository->updateStatus($user, $isActive);
+            $this->audit->record($isActive ? 'UPDATE_USER' : 'DEACTIVATE_USER', $user->tenant_id, 'user', $user->id, ['is_active' => $isActive]);
+
+            return $updated;
+        });
     }
 
     public function toApiPayload(User $user): array
@@ -60,6 +71,6 @@ class TenantUserService
             throw new NotFoundException('Usuário não encontrado');
         }
 
-        return $this->userRepository->updateStatus($user, $isActive);
+        return $this->updateStatus($user, $isActive);
     }
 }

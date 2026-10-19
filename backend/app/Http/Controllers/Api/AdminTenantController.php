@@ -3,20 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\PaginatedQueryRequest;
 use App\Http\Requests\StoreTenantRequest;
 use App\Http\Requests\UpdateStatusRequest;
 use App\Services\TenantService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class AdminTenantController extends Controller
 {
     public function __construct(private readonly TenantService $tenantService) {}
 
-    public function index(Request $request): JsonResponse
+    public function index(PaginatedQueryRequest $request): JsonResponse
     {
-        $perPage = max(1, min(100, (int) $request->integer('per_page', 20)));
-        $paginator = $this->tenantService->listPaginated($perPage);
+        $paginator = $this->tenantService->listPaginated($request->perPage());
 
         return response()->json([
             'success' => true,

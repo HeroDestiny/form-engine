@@ -11,7 +11,7 @@ interface FormVersionRepositoryInterface
 
     public function create(array $data): FormVersion;
 
-    public function findInTenant(int $tenantId, int $formId, int $versionId): ?FormVersion;
+    public function findInTenant(int $tenantId, int $formId, int $versionId, bool $lock = false): ?FormVersion;
 
     public function listPublishedByForm(int $formId): Collection;
 

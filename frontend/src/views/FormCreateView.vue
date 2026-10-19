@@ -1,7 +1,8 @@
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { createForm, getCurrentUser } from '../api'
+import { createForm } from '../api'
+import { canManageForms } from '../auth/session.js'
 
 const router = useRouter()
 
@@ -13,31 +14,8 @@ const form = reactive({
 const loading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
-const roleAllowed = ref(true)
-
-async function ensureCanCreate() {
-  try {
-    const data = await getCurrentUser()
-    const user = data?.data?.user ?? null
-
-    if (!user) {
-      await router.replace('/login')
-      return
-    }
-
-    const role = user.role
-    roleAllowed.value = role === 'manager' || role === 'admin'
-
-    if (!roleAllowed.value) {
-      errorMessage.value = 'Você não tem permissão para criar formulários (apenas manager/admin).'
-    }
-  } catch {
-    await router.replace('/login')
-  }
-}
-
 async function handleSubmit() {
-  if (!roleAllowed.value) return
+  if (!canManageForms.value) return
 
   loading.value = true
   errorMessage.value = ''
@@ -50,7 +28,8 @@ async function handleSubmit() {
 
     const createdFormId = data?.data?.form?.id
     if (createdFormId) {
-      await router.push(`/forms/${createdFormId}`)
+      const versionId = data?.data?.version?.id
+      await router.push(versionId ? `/forms/${createdFormId}/versions/${versionId}/fields` : `/forms/${createdFormId}`)
     } else {
       await router.push('/')
     }
@@ -68,62 +47,43 @@ async function handleSubmit() {
   }
 }
 
-onMounted(() => {
-  ensureCanCreate()
-})
 </script>
 
 <template>
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="brand">
-        <span class="brand-mark">FE</span>
-        <div class="brand-text">
-          <h1>Form Engine</h1>
-          <p>Novo formulário</p>
-        </div>
-      </div>
+  <section class="panel panel-login">
+    <h1>Criar formulário</h1>
+    <p class="panel-subtitle">Defina as informações básicas. Os campos serão adicionados depois.</p>
 
-      <button class="ghost-button" type="button" @click="router.push('/')">Cancelar</button>
-    </header>
+    <form class="form" @submit.prevent="handleSubmit">
+      <label class="field">
+        <span>Nome do formulário</span>
+        <input
+          v-model="form.name"
+          type="text"
+          required
+          minlength="3"
+          maxlength="255"
+          placeholder="Cadastro de Benefícios"
+        />
+      </label>
 
-    <main class="app-main">
-      <section class="panel panel-login">
-        <h2>Criar formulário</h2>
-        <p class="panel-subtitle">Defina as informações básicas. Os campos serão adicionados depois.</p>
+      <label class="field">
+        <span>Descrição <small>(opcional)</small></span>
+        <input
+          v-model="form.description"
+          type="text"
+          maxlength="1000"
+          placeholder="Formulário para coleta de dados de beneficiários."
+        />
+      </label>
 
-        <form class="form" @submit.prevent="handleSubmit">
-          <label class="field">
-            <span>Nome do formulário</span>
-            <input
-              v-model="form.name"
-              type="text"
-              required
-              minlength="3"
-              maxlength="255"
-              placeholder="Cadastro de Benefícios"
-            />
-          </label>
+      <p v-if="errorMessage" class="feedback error" role="alert">{{ errorMessage }}</p>
+      <p v-if="successMessage" class="panel-subtitle">{{ successMessage }}</p>
 
-          <label class="field">
-            <span>Descrição <small>(opcional)</small></span>
-            <input
-              v-model="form.description"
-              type="text"
-              maxlength="1000"
-              placeholder="Formulário para coleta de dados de beneficiários."
-            />
-          </label>
-
-          <p v-if="errorMessage" class="feedback error">{{ errorMessage }}</p>
-          <p v-if="successMessage" class="panel-subtitle">{{ successMessage }}</p>
-
-          <button class="primary-button" type="submit" :disabled="loading || !roleAllowed">
-            <span v-if="!loading">Salvar</span>
-            <span v-else>Salvando…</span>
-          </button>
-        </form>
-      </section>
-    </main>
-  </div>
+      <button class="primary-button" type="submit" :disabled="loading || !canManageForms">
+        <span v-if="!loading">Salvar</span>
+        <span v-else>Salvando…</span>
+      </button>
+    </form>
+  </section>
 </template>

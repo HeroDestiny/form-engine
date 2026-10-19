@@ -32,7 +32,7 @@ Processo automatizado que valida permissões de usuários para acessar recursos 
 3. Sistema valida token de autenticação:
    - Token está presente no header
    - Token é válido (não expirado)
-   - Token pertence a usuário ativo
+   - Novos logins exigem usuário ativo. Conforme UC04 RN07, desativar um usuário preserva tokens existentes até expiração natural; tenant inativo bloqueia o acesso aos dados imediatamente.
 4. Sistema identifica usuário e tenant associados
 5. Sistema verifica isolamento de tenant:
    - Recurso solicitado pertence ao tenant do usuário
@@ -115,7 +115,7 @@ Processo automatizado que valida permissões de usuários para acessar recursos 
 **admin-sistema (Administrador Global)**
 - Todas permissões de `admin`
 - Criar/gerenciar tenants
-- Acesso cross-tenant para suporte
+- Acesso entre tenants pelas rotas `/admin/tenants` para gestão global. Operações de formulários, submissões, usuários e auditoria continuam restritas ao tenant do usuário, inclusive para `admin-sistema`. Acesso de suporte a dados de outros tenants requer um fluxo explícito futuro.
 
 ---
 
@@ -207,7 +207,7 @@ Valida o token de autenticação e garante que o usuário esteja autenticado.
 Garante isolamento multi-tenant verificando se o usuário autenticado pertence ao `tenantId` informado na rota. Em caso de violação, retorna resposta 404 "Recurso não encontrado".
 
 ### 3. `role` (EnsureUserRole)
-Recebe uma ou mais roles como parâmetro (por exemplo, `role:admin`, `role:manager,admin`, `role:admin-sistema`) e bloqueia o acesso com resposta 403 "Você não tem permissão para esta ação" quando o papel do usuário não está na lista permitida.
+Recebe uma ou mais roles como parâmetro (por exemplo, `role:admin`, `role:manager,admin`, `role:admin-sistema`). `admin-sistema` também atende às rotas que permitem `admin`, respeitando o isolamento do tenant. Demais papéis precisam estar na lista; a recusa retorna 403 "Você não tem permissão para esta ação".
 
 ---
 

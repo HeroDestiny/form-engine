@@ -1,76 +1,41 @@
 <script setup>
-import { onMounted, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
+import { useQueryListing } from '../composables/useQueryListing.js'
+import { onMounted } from 'vue'
 import { listAuditLogs } from '../api'
+import { validatePeriod } from '../composables/useListing.js'
+import { formatDate } from '../utils/display.js'
+import ListContent from '../components/ListContent.vue'
+import ListPagination from '../components/ListPagination.vue'
 
-const router = useRouter()
-
-const state = reactive({
-  loading: false,
-  error: '',
-  logs: [],
-  pagination: null,
-})
-
-async function loadLogs() {
-  state.loading = true
-  state.error = ''
-  try {
-    const data = await listAuditLogs({ per_page: 50 })
-    state.logs = data?.data?.logs ?? []
-    state.pagination = data?.data?.pagination ?? null
-  } catch (error) {
-    state.error = error?.body?.message || 'Erro ao carregar auditoria.'
-  } finally {
-    state.loading = false
-  }
-}
-
-onMounted(() => {
-  loadLogs()
-})
+const route = useRoute()
+const { state, filters, perPage, load, apply, reset, setPage, setPerPage } = useQueryListing(
+  listAuditLogs, 'logs', { action: '', user_id: '', entity_type: '', entity_id: '', date_from: '', date_to: '' }, { validate: validatePeriod },
+)
+onMounted(load)
 </script>
 
 <template>
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="brand">
-        <span class="brand-mark">FE</span>
-        <div class="brand-text">
-          <h1>Form Engine</h1>
-          <p>Auditoria</p>
-        </div>
-      </div>
-
-      <button class="ghost-button" type="button" @click="router.push('/')">Voltar</button>
-    </header>
-
-    <main class="app-main">
-      <section class="panel panel-forms">
-        <h2>Registros de auditoria</h2>
-        <p class="panel-subtitle">Últimas ações registradas no tenant.</p>
-
-        <p v-if="state.error" class="feedback error">{{ state.error }}</p>
-        <p v-if="state.loading" class="panel-subtitle">Carregando registros…</p>
-
-        <div v-if="!state.loading && !state.logs.length" class="empty-state">
-          <p>Nenhum registro encontrado.</p>
-        </div>
-
-        <ul v-else class="fields-list">
-          <li v-for="log in state.logs" :key="log.id" class="field-row">
-            <div class="field-row-main">
-              <strong>{{ log.action }}</strong>
-              <span class="field-row-meta">
-                {{ log.entity_type }}#{{ log.entity_id }} · {{ log.created_at }} · {{ log.user?.name || 'sistema' }}
-              </span>
-            </div>
-            <button class="ghost-button" type="button" @click="router.push(`/audit-logs/${log.id}`)">
-              Ver detalhes
-            </button>
-          </li>
-        </ul>
-      </section>
-    </main>
-  </div>
+  <section class="panel panel-forms">
+    <div class="panel-header"><div><h1>Registros de auditoria</h1><p class="panel-subtitle">Consulte as ações registradas na sua organização.</p></div><button class="ghost-button" type="button" :disabled="state.loading" @click="load">Atualizar</button></div>
+    <form class="filter-bar audit-filters" aria-label="Filtros de auditoria" @submit.prevent="apply">
+      <label class="field"><span>Ação</span><input v-model="filters.action" type="text" maxlength="100" placeholder="Ex.: LOGIN_SUCCESS" /></label>
+      <label class="field"><span>ID do usuário</span><input v-model="filters.user_id" type="number" min="1" max="2147483647" step="1" /></label>
+      <label class="field"><span>Tipo de entidade</span><input v-model="filters.entity_type" type="text" maxlength="100" placeholder="Ex.: form" /></label>
+      <label class="field"><span>ID da entidade</span><input v-model="filters.entity_id" type="number" min="1" max="2147483647" step="1" /></label>
+      <label class="field"><span>Data inicial</span><input v-model="filters.date_from" type="date" :max="filters.date_to || '9999-12-31'" /></label>
+      <label class="field"><span>Data final</span><input v-model="filters.date_to" type="date" :min="filters.date_from" max="9999-12-31" /></label>
+      <div class="filter-actions"><button class="primary-button" type="submit" :disabled="state.loading">Aplicar filtros</button><button class="ghost-button" type="button" :disabled="state.loading" @click="reset">Limpar</button></div>
+    </form>
+    <p class="filter-help">Ação e entidade usam correspondência exata. O período considera dias completos em UTC.</p>
+    <ListContent :loading="state.loading" :error="state.error" :empty="!state.items.length" @retry="load">
+      <ul class="fields-list">
+        <li v-for="log in state.items" :key="log.id" class="field-row">
+          <div class="field-row-main"><strong>{{ log.action }}</strong><span class="field-row-meta">{{ log.entity_type }} #{{ log.entity_id ?? '—' }} · {{ formatDate(log.created_at) }} · {{ log.user?.name || 'Sistema' }}</span></div>
+          <RouterLink class="ghost-button" :to="{ path: `/audit-logs/${log.id}`, query: { returnTo: route.fullPath } }">Ver detalhes</RouterLink>
+        </li>
+      </ul>
+    </ListContent>
+    <ListPagination :pagination="state.pagination" :loading="state.loading" :per-page="perPage" @page="setPage" @per-page="setPerPage" />
+  </section>
 </template>

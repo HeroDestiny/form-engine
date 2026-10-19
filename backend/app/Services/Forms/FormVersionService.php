@@ -9,6 +9,7 @@ use App\Models\FormVersion;
 use App\Repositories\Contracts\FormFieldRepositoryInterface;
 use App\Repositories\Contracts\FormRepositoryInterface;
 use App\Repositories\Contracts\FormVersionRepositoryInterface;
+use App\Services\AuditRecorder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -18,6 +19,7 @@ class FormVersionService
         private readonly FormVersionRepositoryInterface $formVersionRepository,
         private readonly FormFieldRepositoryInterface $formFieldRepository,
         private readonly FormRepositoryInterface $formRepository,
+        private readonly AuditRecorder $audit,
     ) {}
 
     public function listForFormInTenant(int $tenantId, int $formId): Collection
@@ -53,6 +55,8 @@ class FormVersionService
                 ]);
             }
 
+            $this->audit->record('CREATE_VERSION', $form->tenant_id, 'form_version', $newVersion->id, ['from_version_id' => $publishedVersion->id], $createdBy);
+
             return [
                 'version' => $newVersion,
                 'fields_copied' => $fields->count(),
@@ -64,32 +68,45 @@ class FormVersionService
 
     public function createNextVersion(int $tenantId, int $formId, int $createdBy): array
     {
-        $form = $this->formRepository->findInTenant($tenantId, $formId);
-        if (! $form) {
-            throw new NotFoundException;
-        }
-        $versions = $this->formVersionRepository->listForFormInTenant($tenantId, $formId);
-        if ($versions->contains(fn (FormVersion $version) => ! $version->is_published)) {
-            throw new BusinessException('Já existe uma versão em edição', 'draft_exists');
-        }
-        $published = $versions->first(fn (FormVersion $version) => $version->is_published);
-        if (! $published) {
-            throw new BusinessException('Publique a versão atual antes de criar nova versão', 'unpublished_version');
-        }
+        return DB::transaction(function () use ($tenantId, $formId, $createdBy) {
+            $form = $this->formRepository->findInTenant($tenantId, $formId, true);
+            if (! $form) {
+                throw new NotFoundException;
+            }
+            $versions = $this->formVersionRepository->listForFormInTenant($tenantId, $formId);
+            if ($versions->contains(fn (FormVersion $version) => ! $version->is_published)) {
+                throw new BusinessException('Já existe uma versão em edição', 'draft_exists');
+            }
+            $published = $versions->first(fn (FormVersion $version) => $version->is_published);
+            if (! $published) {
+                throw new BusinessException('Publique a versão atual antes de criar nova versão', 'unpublished_version');
+            }
 
-        return $this->createNextVersionFromPublished($form, $published, $createdBy);
+            return $this->createNextVersionFromPublished($form, $published, $createdBy);
+        });
     }
 
     public function publish(int $tenantId, int $formId, int $versionId): FormVersion
     {
-        $version = $this->formVersionRepository->findInTenant($tenantId, $formId, $versionId);
-        if (! $version) {
-            throw new NotFoundException;
-        }
-        if ($version->is_published || $this->formFieldRepository->listForVersion($versionId)->isEmpty()) {
-            throw new BusinessException('Versão não pode ser publicada');
-        }
+        return DB::transaction(function () use ($tenantId, $formId, $versionId) {
+            $version = $this->formVersionRepository->findInTenant($tenantId, $formId, $versionId, true);
+            if (! $version) {
+                throw new NotFoundException;
+            }
+            if ($version->is_published || $this->formFieldRepository->listForVersion($versionId)->isEmpty()) {
+                throw new BusinessException('Versão não pode ser publicada');
+            }
 
-        return $this->formVersionRepository->publish($version);
+            foreach ($this->formFieldRepository->listForVersion($versionId) as $field) {
+                if (in_array($field->type, ['select', 'radio', 'checkbox'], true) && empty($field->options)) {
+                    throw new BusinessException('Campo de escolha precisa de opções para publicar');
+                }
+            }
+
+            $published = $this->formVersionRepository->publish($version);
+            $this->audit->record('PUBLISH_VERSION', $version->form->tenant_id, 'form_version', $version->id);
+
+            return $published;
+        });
     }
 }

@@ -6,7 +6,7 @@ use App\Services\Forms\SubmissionService;
 
 class SubmitFormRequest extends ApiRequest
 {
-    private array $context;
+    protected array $context;
 
     protected function prepareForValidation(): void
     {
@@ -14,12 +14,13 @@ class SubmitFormRequest extends ApiRequest
             (int) $this->user()->tenant_id,
             (int) $this->route('formId'),
             $this->isDraft(),
+            filter_var($this->input('version_id'), FILTER_VALIDATE_INT) ?: null,
         );
     }
 
     public function rules(): array
     {
-        return ['values' => ['sometimes', 'array'], ...app(SubmissionService::class)->buildRules($this->context['version'], $this->isDraft())];
+        return ['version_id' => ['nullable', 'integer', 'min:1', 'max:2147483647'], 'values' => ['sometimes', 'array', 'max:'.config('limits.fields_per_version')], ...app(SubmissionService::class)->buildRules($this->context['version'], $this->isDraft())];
     }
 
     public function submissionContext(): array

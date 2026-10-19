@@ -1,167 +1,57 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { logout, getCurrentUser, listForms, listAllForms } from './api'
+import { useRoute } from 'vue-router'
+import { onMounted } from 'vue'
+import { listForms, listAllForms } from './api'
+import { canManageForms } from './auth/session.js'
+import { useQueryListing } from './composables/useQueryListing.js'
+import { versionStatus } from './utils/display.js'
+import ListContent from './components/ListContent.vue'
 
-const router = useRouter()
-
-const state = reactive({
-  user: null,
-  tenant: null,
-  forms: [],
-})
-
-const loading = ref(false)
-const errorMessage = ref('')
-
-async function loadSession() {
-  loading.value = true
-  errorMessage.value = ''
-
-  try {
-    const data = await getCurrentUser()
-    state.user = data?.data?.user ?? null
-    state.tenant = data?.data?.tenant ?? null
-
-    if (!state.user) {
-      await router.replace('/login')
-      return
-    }
-
-    await loadForms()
-  } catch {
-    state.user = null
-    state.tenant = null
-    await router.replace('/login')
-  } finally {
-    loading.value = false
-  }
-}
-
-async function loadForms() {
-  try {
-    const isManagerOrAdmin = state.user && (state.user.role === 'manager' || state.user.role === 'admin')
-    const data = isManagerOrAdmin ? await listAllForms() : await listForms()
-    state.forms = data?.data?.forms ?? []
-  } catch (error) {
-    errorMessage.value = error?.body?.message || 'Erro ao carregar formulários.'
-  }
-}
-
-async function handleLogout() {
-  await logout()
-  state.user = null
-  state.tenant = null
-  state.forms = []
-  await router.push('/login')
-}
-
-onMounted(() => {
-  loadSession()
-})
+const route = useRoute()
+const { state, filters, applied, load, apply, reset } = useQueryListing(
+  (params, options) => (canManageForms.value ? listAllForms : listForms)(params, options),
+  'forms', { search: '', sort: 'name', order: 'asc' }, { paginated: false },
+)
+onMounted(load)
 </script>
 
 <template>
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="brand">
-        <span class="brand-mark">FE</span>
-        <div class="brand-text">
-          <h1>Form Engine</h1>
-          <p>Painel principal</p>
-        </div>
+  <section class="panel panel-forms">
+    <div class="panel-header">
+      <div>
+        <h1>Formulários</h1>
+        <p class="panel-subtitle">{{ canManageForms ? 'Crie e gerencie os formulários da sua organização.' : 'Escolha um formulário disponível para preencher.' }}</p>
       </div>
-
-      <div v-if="state.user" class="user-chip">
-        <nav class="header-nav">
-          <button class="ghost-button" type="button" @click="router.push('/')">Formulários</button>
-          <button class="ghost-button" type="button" @click="router.push('/submissions')">Submissões</button>
-          <button
-            v-if="state.user.role === 'admin'"
-            class="ghost-button"
-            type="button"
-            @click="router.push('/admin/users')"
-          >
-            Usuários
-          </button>
-          <button
-            v-if="state.user.role === 'admin-sistema'"
-            class="ghost-button"
-            type="button"
-            @click="router.push('/admin/tenants')"
-          >
-            Tenants
-          </button>
-          <button class="ghost-button" type="button" @click="router.push('/audit-logs')">Auditoria</button>
-        </nav>
-
-        <div class="user-main">
-          <span class="user-name">{{ state.user.name }}</span>
-          <span class="user-role">{{ state.user.role }}</span>
-        </div>
-        <div class="user-sub" v-if="state.tenant">
-          {{ state.tenant.name }}
-        </div>
-        <button class="ghost-button" type="button" @click="handleLogout">Sair</button>
+      <div class="panel-actions">
+        <button class="ghost-button" type="button" :disabled="state.loading" @click="load">Atualizar</button>
+        <RouterLink v-if="canManageForms" class="primary-button" to="/forms/new">Novo formulário</RouterLink>
       </div>
-    </header>
+    </div>
 
-    <main class="app-main">
-      <section class="panel panel-forms">
-        <div class="panel-header">
-          <div>
-            <h2>Formulários</h2>
-            <p class="panel-subtitle">
-              Usuários veem apenas formulários ativos com versão publicada. Managers/Admins veem todos os formulários do tenant.
-            </p>
-          </div>
-          <div class="panel-actions">
-            <button class="ghost-button" type="button" @click="loadForms">Atualizar</button>
-            <button
-              v-if="state.user && (state.user.role === 'manager' || state.user.role === 'admin')"
-              class="ghost-button"
-              type="button"
-              @click="router.push('/forms/new')"
-            >
-              Novo formulário
-            </button>
-          </div>
-        </div>
+    <form class="filter-bar" aria-label="Filtros de formulários" @submit.prevent="apply">
+      <label class="field filter-search"><span>Buscar por nome</span><input v-model="filters.search" type="search" maxlength="255" placeholder="Nome do formulário" /></label>
+      <label class="field"><span>Ordenar por</span><select v-model="filters.sort"><option value="name">Nome</option><option value="created_at">Data de criação</option></select></label>
+      <label class="field"><span>Ordem</span><select v-model="filters.order"><option value="asc">Crescente</option><option value="desc">Decrescente</option></select></label>
+      <div class="filter-actions">
+        <button class="primary-button" type="submit" :disabled="state.loading">Buscar</button>
+        <button class="ghost-button" type="button" :disabled="state.loading" @click="reset">Limpar</button>
+      </div>
+    </form>
+    <p v-if="!state.loading && !state.error" class="result-summary" role="status">{{ state.total }} formulário(s){{ applied.search ? ` para “${applied.search}”` : '' }}</p>
 
-        <p v-if="loading" class="panel-subtitle">Carregando…</p>
-        <p v-if="!loading && errorMessage" class="feedback error">{{ errorMessage }}</p>
-
-        <div v-if="!loading && !state.forms.length && !errorMessage" class="empty-state">
-          <p>Nenhum formulário disponível no momento.</p>
-        </div>
-
-        <div v-else class="forms-grid">
-          <article v-for="form in state.forms" :key="form.id" class="form-card">
-            <RouterLink :to="`/forms/${form.id}`">
-              <h3>{{ form.name }}</h3>
-              <p class="form-description">{{ form.description || 'Sem descrição.' }}</p>
-              <div class="form-meta" v-if="form.latest_version">
-                <span>Versão {{ form.latest_version.version_number }}</span>
-                <span v-if="form.latest_version.fields_count !== undefined">
-                  {{ form.latest_version.fields_count }} campo(s)
-                </span>
-                <span class="form-status">
-                  ·
-                  <template v-if="form.is_active === false">
-                    inativo
-                  </template>
-                  <template v-else-if="form.latest_version && form.latest_version.is_published">
-                    ativo
-                  </template>
-                  <template v-else>
-                    rascunho
-                  </template>
-                </span>
-              </div>
-            </RouterLink>
-          </article>
-        </div>
-      </section>
-    </main>
-  </div>
+    <ListContent :loading="state.loading" :error="state.error" :empty="!state.items.length" :empty-message="applied.search ? 'Nenhum formulário corresponde à busca. Tente outro nome ou limpe os filtros.' : 'Nenhum formulário disponível no momento.'" @retry="load">
+      <div class="forms-grid">
+        <article v-for="form in state.items" :key="form.id" class="form-card">
+          <RouterLink :to="{ path: `/forms/${form.id}`, query: { returnTo: route.fullPath } }">
+            <div class="card-heading"><h2>{{ form.name }}</h2><span class="status-badge" :class="form.is_active ? 'status-success' : 'status-muted'">{{ form.is_active ? 'Ativo' : 'Inativo' }}</span></div>
+            <p class="form-description">{{ form.description || 'Sem descrição.' }}</p>
+            <div class="form-meta">
+              <span class="status-badge" :class="form.latest_version?.is_published ? 'status-success' : 'status-warning'">{{ versionStatus(form.latest_version) }}</span>
+              <span v-if="form.latest_version">Versão {{ form.latest_version.version_number }} · {{ form.latest_version.fields_count ?? 0 }} campo(s)</span>
+            </div>
+          </RouterLink>
+        </article>
+      </div>
+    </ListContent>
+  </section>
 </template>

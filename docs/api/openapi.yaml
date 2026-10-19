@@ -11,6 +11,11 @@ info:
     - Sistema de permissões baseado em papéis (RBAC)
     - Auditoria completa de ações
     - Exportação de dados em CSV
+    - Requisições limitadas a 2 MiB (413 em envelope JSON); limites detalhados em docs/api/README.md
+    - JSON malformado ou raiz escalar/lista não vazia retorna 400; caracteres NUL em valores ou chaves retornam 422
+    - Datas de calendário usam anos de 0001 a 9999; conflitos de unicidade conhecidos retornam 422 mesmo sob concorrência
+    - Erros HTTP da API usam o envelope padrão, preservando status e cabeçalhos; erros internos não expõem detalhes
+    - Logout registra LOGOUT e revoga o token na mesma transação
 
     ## Autenticação
     Todas as rotas protegidas requerem token Bearer emitido pelo Laravel Sanctum.
@@ -30,9 +35,9 @@ servers:
   - url: http://localhost:8000/api
     description: Desenvolvimento local
   - url: https://staging.formengine.com/api
-    description: Ambiente de staging
+    description: Exemplo de URL de staging; ambiente não provisionado
   - url: https://api.formengine.com/api
-    description: Produção
+    description: Exemplo de URL de produção; ambiente não provisionado
 
 tags:
   - name: Autenticação
@@ -61,7 +66,10 @@ paths:
       tags:
         - Autenticação
       summary: Autenticar no sistema
-      description: Realiza login e retorna token de acesso
+      description: |
+        Realiza login e retorna token de acesso. Validade padrão de 60 minutos,
+        configurável por SANCTUM_EXPIRATION. Até 5 tentativas por minuto por IP
+        e por e-mail/tenant (LOGIN_ATTEMPTS_PER_MINUTE), incluindo logins válidos.
       operationId: login
       requestBody:
         required: true
@@ -80,9 +88,12 @@ paths:
                 password:
                   type: string
                   format: password
+                  maxLength: 72
+                  description: Máximo de 72 bytes UTF-8, sem caracteres nulos (limite do bcrypt).
                   example: senha123
                 tenant_slug:
                   type: string
+                  maxLength: 100
                   description: Obrigatório quando o mesmo e-mail existir em múltiplos tenants
                   pattern: '^[a-z0-9-]+$'
                   example: prefeitura-exemplo
@@ -99,6 +110,13 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationError'
+        '429':
+          description: Limite de login excedido; bloqueio auditado como LOGIN_THROTTLED
+          headers:
+            Retry-After:
+              description: Segundos até uma nova tentativa
+              schema:
+                type: integer
 
   /auth/logout:
     post:
@@ -184,6 +202,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
 
     post:
       tags:
@@ -210,6 +230,7 @@ paths:
                   example: Prefeitura Municipal de Exemplo
                 slug:
                   type: string
+                  maxLength: 100
                   pattern: '^[a-z0-9-]+$'
                   example: prefeitura-exemplo
       responses:
@@ -318,6 +339,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
 
     post:
       tags:
@@ -358,6 +381,8 @@ paths:
                   type: string
                   format: password
                   minLength: 8
+                  maxLength: 72
+                  description: Mínimo de 8 caracteres e máximo de 72 bytes UTF-8, sem caracteres nulos.
                   example: senha123
                 role:
                   type: string
@@ -439,7 +464,10 @@ paths:
       tags:
         - Formulários
       summary: Listar formulários disponíveis
-      description: Lista formulários ativos do tenant
+      description: |
+        Lista formulários ativos com versão publicada no tenant. scope=all permite
+        incluir inativos e rascunhos para manager/admin/admin-sistema; user continua
+        vendo apenas disponíveis. Busca sem distinção de caixa e ordenação com desempate por ID.
       operationId: listForms
       security:
         - bearerAuth: []
@@ -448,6 +476,7 @@ paths:
           in: query
           schema:
             type: string
+            maxLength: 255
           description: Termo de busca
         - name: sort
           in: query
@@ -461,6 +490,12 @@ paths:
             type: string
             enum: [asc, desc]
             default: asc
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [available, all]
+            default: available
       responses:
         '200':
           description: Lista de formulários
@@ -483,6 +518,8 @@ paths:
                             example: 5
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
 
     post:
       tags:
@@ -979,7 +1016,7 @@ paths:
       tags:
         - Submissões
       summary: Submeter formulário
-      description: Preenche e submete formulário
+      description: Preenche e submete formulário. version_id opcional fixa uma versão publicada; quando omitido, usa a última publicada.
       operationId: submitForm
       security:
         - bearerAuth: []
@@ -990,13 +1027,11 @@ paths:
           schema:
             type: integer
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
-              required:
-                - values
               properties:
                 values:
                   type: object
@@ -1006,6 +1041,9 @@ paths:
                     estado_civil: solteiro
                     data_nascimento: '1990-05-15'
                     telefone: (11) 98765-4321
+                version_id:
+                  type: integer
+                  description: ID de uma versão publicada deste formulário.
       responses:
         '201':
           description: Formulário submetido
@@ -1080,7 +1118,7 @@ paths:
       tags:
         - Submissões
       summary: Salvar rascunho
-      description: Salva preenchimento parcial
+      description: Salva preenchimento parcial. version_id opcional fixa uma versão publicada; quando omitido, usa a última publicada.
       operationId: saveDraft
       security:
         - bearerAuth: []
@@ -1091,17 +1129,18 @@ paths:
           schema:
             type: integer
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
-              required:
-                - values
               properties:
                 values:
                   type: object
                   additionalProperties: true
+                version_id:
+                  type: integer
+                  description: ID de uma versão publicada deste formulário.
       responses:
         '201':
           description: Rascunho salvo
@@ -1124,12 +1163,83 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /forms/{formId}/drafts/{submissionId}:
+    parameters:
+      - name: formId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: submissionId
+        in: path
+        required: true
+        schema: {type: integer}
+    patch:
+      tags: [Submissões]
+      summary: Atualizar rascunho existente
+      description: Apenas o proprietário pode alterar o rascunho. O campo values é obrigatório e substitui todas as respostas, mantendo ID e versão original. Envie values como objeto vazio para limpar; omitir values recebe 422. version_id não é permitido.
+      operationId: updateDraft
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftValuesPayload'
+      responses:
+        '200':
+          description: Rascunho atualizado; data.draft contém o registro.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SuccessResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
+  /forms/{formId}/drafts/{submissionId}/submit:
+    parameters:
+      - name: formId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: submissionId
+        in: path
+        required: true
+        schema: {type: integer}
+    post:
+      tags: [Submissões]
+      summary: Finalizar rascunho existente
+      description: Valida todos os obrigatórios da versão original e converte o mesmo registro em submitted, com submitted_at. Dados de outro proprietário ou tenant e registros já finalizados retornam 404.
+      operationId: finalizeDraft
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftValuesPayload'
+      responses:
+        '200':
+          description: Rascunho finalizado; data.submission contém o registro.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SuccessResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+
   /submissions:
     get:
       tags:
         - Submissões
       summary: Consultar submissões
-      description: Lista submissões do tenant (manager/admin) ou próprias (user)
+      description: |
+        Lista submissões do tenant (manager/admin/admin-sistema) ou próprias (user).
+        Filtros são combinados; IDs inexistentes/de outros tenants produzem lista vazia.
+        user_id é ignorado para user. Datas YYYY-MM-DD são inclusivas e usam submitted_at
+        para submitted ou created_at para draft. Ordenação decrescente por data e ID.
+        Parâmetros inválidos retornam 422, incluindo per_page fora de 1..100.
       operationId: listSubmissions
       security:
         - bearerAuth: []
@@ -1138,11 +1248,15 @@ paths:
           in: query
           schema:
             type: integer
+            minimum: 1
+            maximum: 2147483647
           description: Filtrar por formulário
         - name: version_id
           in: query
           schema:
             type: integer
+            minimum: 1
+            maximum: 2147483647
           description: Filtrar por versão
         - name: date_from
           in: query
@@ -1160,6 +1274,8 @@ paths:
           in: query
           schema:
             type: integer
+            minimum: 1
+            maximum: 2147483647
           description: Filtrar por usuário
         - name: status
           in: query
@@ -1190,6 +1306,8 @@ paths:
                             $ref: '#/components/schemas/Pagination'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
 
   /submissions/{submissionId}:
     get:
@@ -1229,7 +1347,14 @@ paths:
       tags:
         - Exportação
       summary: Exportar dados em CSV
-      description: Exporta submissões para CSV (manager/admin)
+      description: |
+        Exporta submissões para CSV (manager/admin/admin-sistema) com filtros por dias
+        inclusivos YYYY-MM-DD. Até 10.000 registros, 100 versões, 500 colunas e 25 MiB;
+        EXPORT_MAX_ROWS e EXPORT_MAX_BYTES podem reduzir os limites. Exceder um teto
+        retorna 422 antes do download. Valores são lidos em lotes e o arquivo é preparado
+        em disco. Células textuais com prefixos perigosos recebem tabulação inicial
+        para visualização em planilhas, inclusive cabeçalhos e labels. Essa tabulação
+        permanece nos dados exportados; dados armazenados não são alterados.
       operationId: exportSubmissions
       security:
         - bearerAuth: []
@@ -1247,6 +1372,8 @@ paths:
                   example: 5
                 version_ids:
                   type: array
+                  maxItems: 100
+                  uniqueItems: true
                   items:
                     type: integer
                   example: [1, 2]
@@ -1262,6 +1389,10 @@ paths:
                   type: string
                   enum: [csv]
                   default: csv
+                separator:
+                  type: string
+                  enum: [',', ';']
+                  default: ','
       responses:
         '200':
           description: CSV gerado
@@ -1288,7 +1419,11 @@ paths:
       tags:
         - Auditoria
       summary: Consultar log de auditoria
-      description: Lista registros de auditoria (apenas admin)
+      description: |
+        Lista registros do tenant (admin/admin-sistema), ordenados por created_at e ID
+        decrescentes. Filtros combinados e valores inexistentes produzem lista vazia.
+        Datas YYYY-MM-DD incluem o dia inteiro em UTC; timestamps ISO 8601 com segundos
+        e fuso informam limites exatos normalizados para UTC. Parâmetros inválidos retornam 422.
       operationId: listAuditLogs
       security:
         - bearerAuth: []
@@ -1297,28 +1432,38 @@ paths:
           in: query
           schema:
             type: string
-            format: date-time
+            oneOf:
+              - {format: date}
+              - {format: date-time}
         - name: date_to
           in: query
           schema:
             type: string
-            format: date-time
+            oneOf:
+              - {format: date}
+              - {format: date-time}
         - name: user_id
           in: query
           schema:
             type: integer
+            minimum: 1
+            maximum: 2147483647
         - name: action
           in: query
           schema:
             type: string
+            maxLength: 100
         - name: entity_type
           in: query
           schema:
             type: string
+            maxLength: 100
         - name: entity_id
           in: query
           schema:
             type: integer
+            minimum: 1
+            maximum: 2147483647
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PerPage'
       responses:
@@ -1344,6 +1489,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
 
   /audit-logs/{logId}:
     get:
@@ -1395,6 +1542,7 @@ components:
       schema:
         type: integer
         minimum: 1
+        maximum: 2147483647
         default: 1
       description: Número da página
 
@@ -1409,6 +1557,15 @@ components:
       description: Itens por página
 
   schemas:
+    DraftValuesPayload:
+      type: object
+      description: Até 100 valores; texto até 1000 caracteres, textarea até 10000, email até 254, data YYYY-MM-DD, checkbox até 100 escolhas distintas.
+      required: [values]
+      properties:
+        values:
+          type: object
+          additionalProperties: true
+          example: {nome_completo: Maria Santos}
     # ========== Respostas Base ==========
     SuccessResponse:
       type: object
@@ -1497,6 +1654,7 @@ components:
           example: Prefeitura Municipal de Exemplo
         slug:
           type: string
+          maxLength: 100
           example: prefeitura-exemplo
         is_active:
           type: boolean
@@ -1660,6 +1818,7 @@ components:
           maxLength: 255
         name:
           type: string
+          maxLength: 100
           pattern: '^[a-z0-9_]+$'
         type:
           type: string
@@ -1668,6 +1827,7 @@ components:
           type: boolean
         options:
           type: array
+          maxItems: 100
           items:
             type: object
             required:
@@ -1676,11 +1836,14 @@ components:
             properties:
               value:
                 type: string
+                maxLength: 255
               label:
                 type: string
+                maxLength: 255
         order:
           type: integer
           minimum: 1
+          maximum: 2147483647
 
     FormWithVersion:
       allOf:
@@ -1796,10 +1959,25 @@ components:
               type:
                 type: string
               value:
-                type: string
+                nullable: true
+                oneOf:
+                  - type: string
+                  - type: array
+                    items: {type: string}
               value_label:
                 type: string
+                nullable: true
                 description: Label da option (para select/radio)
+              value_labels:
+                type: array
+                description: Labels das opções selecionadas em checkbox, preservando a ordem dos valores
+                items:
+                  type: string
+              value_formatted:
+                type: string
+                nullable: true
+                description: Data no formato dd/mm/aaaa; o valor original permanece em value
+                example: 17/10/2026
               is_required:
                 type: boolean
 

@@ -12,7 +12,10 @@ class EnsureUserRole
     {
         $user = $request->user();
 
-        if (! $user || ! in_array($user->role, $roles, true)) {
+        $allowed = $user && (in_array($user->role, $roles, true)
+            || ($user->role === 'admin-sistema' && in_array('admin', $roles, true)));
+
+        if (! $allowed) {
             return response()->json([
                 'success' => false,
                 'data' => null,

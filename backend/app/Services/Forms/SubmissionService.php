@@ -12,9 +12,13 @@ use App\Repositories\Contracts\FormRepositoryInterface;
 use App\Repositories\Contracts\FormSubmissionRepositoryInterface;
 use App\Repositories\Contracts\FormSubmissionValueRepositoryInterface;
 use App\Repositories\Contracts\FormVersionRepositoryInterface;
+use App\Rules\CalendarDate;
+use App\Services\AuditRecorder;
+use DateTimeImmutable;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 class SubmissionService
@@ -25,6 +29,7 @@ class SubmissionService
         private readonly FormRepositoryInterface $formRepository,
         private readonly FormVersionRepositoryInterface $formVersionRepository,
         private readonly SubmissionCsvService $csvService,
+        private readonly AuditRecorder $audit,
     ) {}
 
     public function buildRules(FormVersion $version, bool $partial = false): array
@@ -32,31 +37,40 @@ class SubmissionService
         $rules = [];
 
         foreach ($version->fields as $field) {
-            $fieldRules = [];
-
-            if (! $partial && $field->is_required) {
-                $fieldRules[] = 'required';
-            }
+            $fieldRules = $partial ? ['sometimes', 'nullable'] : [$field->is_required ? 'required' : 'nullable'];
 
             if (in_array($field->type, ['text', 'textarea', 'email', 'select', 'radio'], true)) {
                 $fieldRules[] = 'string';
             }
             if ($field->type === 'number') {
                 $fieldRules[] = 'numeric';
+                $fieldRules[] = 'between:-1000000000000000,1000000000000000';
+            }
+            if ($field->type === 'text') {
+                $fieldRules[] = 'max:'.config('limits.text_length');
+            }
+            if ($field->type === 'textarea') {
+                $fieldRules[] = 'max:'.config('limits.textarea_length');
+            }
+            if (in_array($field->type, ['select', 'radio'], true)) {
+                $fieldRules[] = 'max:255';
+            }
+            if ($field->type === 'email') {
+                $fieldRules[] = 'email';
+                $fieldRules[] = 'max:254';
             }
             if ($field->type === 'date') {
-                $fieldRules[] = 'date';
+                $fieldRules[] = new CalendarDate;
             }
             if (in_array($field->type, ['select', 'radio'], true) && is_array($field->options)) {
                 $fieldRules[] = Rule::in(array_column($field->options, 'value'));
             }
 
-            if ($partial) {
-                if (! empty($fieldRules)) {
-                    $rules['values.'.$field->name] = ['sometimes', ...$fieldRules];
-                }
-
-                continue;
+            if ($field->type === 'checkbox') {
+                $fieldRules[] = 'array';
+                $fieldRules[] = 'list';
+                $fieldRules[] = 'max:'.config('limits.options_per_field');
+                $rules['values.'.$field->name.'.*'] = ['string', 'max:255', 'distinct:strict', Rule::in(array_column($field->options ?? [], 'value'))];
             }
 
             $rules['values.'.$field->name] = $fieldRules;
@@ -68,6 +82,7 @@ class SubmissionService
     public function createSubmitted(int $tenantId, int $userId, FormVersion $version, array $values): FormSubmission
     {
         return DB::transaction(function () use ($tenantId, $userId, $version, $values) {
+            $this->ensureWritableVersion($tenantId, $version);
             $submission = $this->formSubmissionRepository->create([
                 'tenant_id' => $tenantId,
                 'form_version_id' => $version->id,
@@ -77,6 +92,7 @@ class SubmissionService
             ]);
 
             $this->persistValues($submission, $version, $values);
+            $this->audit->record('SUBMIT_FORM', $tenantId, 'form_submission', $submission->id, ['version_id' => $version->id], $userId);
 
             return $submission;
         });
@@ -85,6 +101,7 @@ class SubmissionService
     public function createDraft(int $tenantId, int $userId, FormVersion $version, array $values): FormSubmission
     {
         return DB::transaction(function () use ($tenantId, $userId, $version, $values) {
+            $this->ensureWritableVersion($tenantId, $version);
             $draft = $this->formSubmissionRepository->create([
                 'tenant_id' => $tenantId,
                 'form_version_id' => $version->id,
@@ -93,9 +110,8 @@ class SubmissionService
                 'submitted_at' => null,
             ]);
 
-            if ($version) {
-                $this->persistValues($draft, $version, $values);
-            }
+            $this->persistValues($draft, $version, $values);
+            $this->audit->record('SAVE_DRAFT', $tenantId, 'form_submission', $draft->id, ['version_id' => $version->id], $userId);
 
             return $draft;
         });
@@ -111,14 +127,14 @@ class SubmissionService
             $this->formSubmissionValueRepository->create([
                 'form_submission_id' => $submission->id,
                 'form_field_id' => $field->id,
-                'value' => (string) $values[$field->name],
+                'value' => SubmissionFieldValue::encode($field, $values[$field->name]),
             ]);
         }
     }
 
     public function listForUser(User $actor, array $filters, int $perPage): LengthAwarePaginator
     {
-        if (! in_array($actor->role, ['manager', 'admin'], true)) {
+        if (! in_array($actor->role, ['manager', 'admin', 'admin-sistema'], true)) {
             unset($filters['user_id']);
         }
         $paginator = $this->formSubmissionRepository->paginateForTenant(
@@ -158,7 +174,46 @@ class SubmissionService
 
     public function listDrafts(User $actor, int $formId): Collection
     {
+        if (! $this->formRepository->findInTenant((int) $actor->tenant_id, $formId)) {
+            throw new NotFoundException;
+        }
+
         return $this->formSubmissionRepository->listDrafts((int) $actor->tenant_id, (int) $actor->id, $formId);
+    }
+
+    public function draftContext(User $actor, int $formId, int $submissionId): array
+    {
+        $draft = $this->formSubmissionRepository->findInTenant((int) $actor->tenant_id, $submissionId);
+        if (! $draft || $draft->submitted_by !== $actor->id || $draft->status !== 'draft' || $draft->version->form_id !== $formId) {
+            throw new NotFoundException('Rascunho não encontrado');
+        }
+        if (! $draft->version->form->is_active) {
+            throw new BusinessException('Este formulário não está mais disponível', 'form_unavailable');
+        }
+
+        return ['form' => $draft->version->form, 'version' => $draft->version, 'draft' => $draft];
+    }
+
+    public function saveExistingDraft(User $actor, int $formId, int $submissionId, array $values, bool $finalize = false): FormSubmission
+    {
+        return DB::transaction(function () use ($actor, $formId, $submissionId, $values, $finalize) {
+            $draft = $this->formSubmissionRepository->lockDraft((int) $actor->tenant_id, (int) $actor->id, $formId, $submissionId);
+            if (! $draft) {
+                throw new NotFoundException('Rascunho não encontrado');
+            }
+            $context = $this->draftContext($actor, $formId, $submissionId);
+            $this->ensureWritableVersion((int) $actor->tenant_id, $context['version']);
+            // Revalidate against the stored version inside the transaction.
+            $validated = Validator::make(['values' => $values], $this->buildRules($context['version'], ! $finalize))->validate();
+            $this->formSubmissionValueRepository->deleteForSubmission($draft->id);
+            $this->persistValues($draft, $context['version'], $validated['values'] ?? []);
+            if ($finalize) {
+                $draft = $this->formSubmissionRepository->update($draft, ['status' => 'submitted', 'submitted_at' => now()]);
+            }
+            $this->audit->record($finalize ? 'SUBMIT_FORM' : 'SAVE_DRAFT', $actor->tenant_id, 'form_submission', $draft->id, ['version_id' => $draft->form_version_id, 'from_draft' => true], $actor->id);
+
+            return $draft;
+        });
     }
 
     public function details(User $actor, int $submissionId): array
@@ -170,7 +225,7 @@ class SubmissionService
         $owner = $submission->submitter;
 
         $values = $submission->version->fields->sortBy('order')->map(function (FormField $field) use ($submission) {
-            $value = $submission->values->firstWhere('form_field_id', $field->id)?->value;
+            $value = SubmissionFieldValue::decode($field, $submission->values->firstWhere('form_field_id', $field->id)?->value);
             $item = [
                 'field_id' => $field->id,
                 'label' => $field->label,
@@ -181,8 +236,14 @@ class SubmissionService
             ];
 
             if (in_array($field->type, ['select', 'radio'], true) && is_array($field->options)) {
-                $selected = collect($field->options)->firstWhere('value', $value);
-                $item['value_label'] = $selected['label'] ?? $value;
+                $item['value_label'] = SubmissionFieldValue::label($field, $value);
+            }
+            if ($field->type === 'checkbox') {
+                $item['value_labels'] = array_map(fn ($choice) => SubmissionFieldValue::label($field, $choice), $value ?? []);
+            }
+            if ($field->type === 'date') {
+                $date = $value === null ? false : DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+                $item['value_formatted'] = $date && $date->format('Y-m-d') === $value ? $date->format('d/m/Y') : $value;
             }
 
             return $item;
@@ -214,19 +275,21 @@ class SubmissionService
         ];
     }
 
-    public function submissionContext(int $tenantId, int $formId, bool $partial = false): array
+    public function submissionContext(int $tenantId, int $formId, bool $partial = false, ?int $versionId = null): array
     {
         $form = $this->formRepository->findInTenant($tenantId, $formId);
         if (! $form) {
-            if ($partial) {
-                throw new BusinessException('Este formulário não está mais disponível');
-            }
             throw new NotFoundException;
         }
         if (! $form->is_active) {
             throw new BusinessException('Este formulário não está mais disponível', $partial ? 'invalid_operation' : 'form_unavailable');
         }
-        $version = $this->formVersionRepository->findLatestPublishedByForm($formId);
+        $version = $versionId === null
+            ? $this->formVersionRepository->findLatestPublishedByForm($formId)
+            : $this->formVersionRepository->findInTenant($tenantId, $formId, $versionId);
+        if ($versionId !== null && (! $version || ! $version->is_published)) {
+            throw new NotFoundException('Versão publicada não encontrada');
+        }
         if (! $version) {
             throw new BusinessException('Versão não pode ser publicada');
         }
@@ -236,18 +299,47 @@ class SubmissionService
 
     public function exportForUser(User $actor, array $filters): array
     {
-        if (! in_array($actor->role, ['manager', 'admin'], true)) {
+        if (! in_array($actor->role, ['manager', 'admin', 'admin-sistema'], true)) {
             throw new BusinessException('Você não tem permissão para esta ação', 'forbidden');
         }
         $form = $this->formRepository->findInTenant((int) $actor->tenant_id, (int) $filters['form_id']);
         if (! $form) {
             throw new BusinessException('Nenhuma submissão encontrada para exportar');
         }
-        $submissions = $this->formSubmissionRepository->listForExport((int) $actor->tenant_id, $form->id, $filters);
-        if ($submissions->isEmpty()) {
+        $limit = (int) config('limits.export_rows');
+        $selection = $this->formSubmissionRepository->selectForExport((int) $actor->tenant_id, $form->id, $filters, $limit + 1);
+        if (! $selection['ids']) {
             throw new BusinessException('Nenhuma submissão encontrada para exportar');
         }
+        if (count($selection['ids']) > $limit) {
+            throw new BusinessException('Limite de registros para exportação excedido. Restrinja os filtros.');
+        }
+        if (count($selection['version_ids']) > config('limits.export_versions')) {
+            throw new BusinessException('Limite de versões para exportação excedido. Restrinja os filtros.');
+        }
 
-        return $this->csvService->render($form->id, $submissions);
+        $versions = $this->formSubmissionRepository->versionsForExport((int) $actor->tenant_id, $form->id, $selection['version_ids']);
+        $submissions = $this->formSubmissionRepository->iterateForExport((int) $actor->tenant_id, $form->id, $selection['ids'], (int) config('limits.export_chunk_size'));
+        $csv = $this->csvService->render($form->id, $versions, $submissions, $filters['separator'] ?? ',');
+        try {
+            $this->audit->record('EXPORT_DATA', $actor->tenant_id, 'form', $form->id, [
+                'records_count' => $csv['records_count'],
+                'bytes' => $csv['bytes'],
+                'filters' => array_intersect_key($filters, array_flip(['version_ids', 'date_from', 'date_to', 'separator'])),
+            ], $actor->id);
+        } catch (\Throwable $exception) {
+            fclose($csv['stream']);
+            throw $exception;
+        }
+
+        return $csv;
+    }
+
+    private function ensureWritableVersion(int $tenantId, FormVersion $version): void
+    {
+        $form = $this->formRepository->findInTenant($tenantId, $version->form_id, true);
+        if (! $form || ! $form->is_active || ! $version->is_published) {
+            throw new BusinessException('Este formulário não está mais disponível', 'form_unavailable');
+        }
     }
 }

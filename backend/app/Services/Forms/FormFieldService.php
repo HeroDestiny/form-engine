@@ -8,13 +8,16 @@ use App\Models\FormField;
 use App\Models\FormVersion;
 use App\Repositories\Contracts\FormFieldRepositoryInterface;
 use App\Repositories\Contracts\FormVersionRepositoryInterface;
+use App\Services\AuditRecorder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class FormFieldService
 {
     public function __construct(
         private readonly FormFieldRepositoryInterface $formFieldRepository,
         private readonly FormVersionRepositoryInterface $formVersionRepository,
+        private readonly AuditRecorder $audit,
     ) {}
 
     public function listForVersionInTenant(int $tenantId, int $formId, int $versionId): Collection
@@ -38,29 +41,46 @@ class FormFieldService
     {
         $this->ensureEditable($version);
 
-        return $this->formFieldRepository->create([
-            'form_version_id' => $version->id,
-            'label' => $payload['label'],
-            'name' => $payload['name'],
-            'type' => $payload['type'],
-            'is_required' => $payload['is_required'],
-            'options' => $payload['options'],
-            'order' => $payload['order'],
-        ]);
+        return DB::transaction(function () use ($version, $payload) {
+            $version = $this->lockVersion($version);
+            $this->ensureEditable($version);
+            if ($version->fields()->count() >= config('limits.fields_per_version')) {
+                throw new BusinessException('Limite de campos por versão atingido.');
+            }
+            $field = $this->formFieldRepository->create([
+                'form_version_id' => $version->id,
+                'label' => $payload['label'],
+                'name' => $payload['name'],
+                'type' => $payload['type'],
+                'is_required' => $payload['is_required'],
+                'options' => $payload['options'],
+                'order' => $payload['order'],
+            ]);
+            $this->audit->record('ADD_FIELD', $version->form->tenant_id, 'form_field', $field->id, ['version_id' => $version->id]);
+
+            return $field;
+        });
     }
 
     public function update(FormField $field, array $payload): FormField
     {
         $this->ensureEditable($field->version);
 
-        return $this->formFieldRepository->update($field, [
-            'label' => $payload['label'],
-            'name' => $payload['name'],
-            'type' => $payload['type'],
-            'is_required' => $payload['is_required'],
-            'options' => $payload['options'],
-            'order' => $payload['order'],
-        ]);
+        return DB::transaction(function () use ($field, $payload) {
+            $this->ensureEditable($this->lockVersion($field->version));
+            $field->refresh();
+            $updated = $this->formFieldRepository->update($field, [
+                'label' => $payload['label'],
+                'name' => $payload['name'],
+                'type' => $payload['type'],
+                'is_required' => $payload['is_required'],
+                'options' => $payload['options'],
+                'order' => $payload['order'],
+            ]);
+            $this->audit->record('UPDATE_FIELD', $field->version->form->tenant_id, 'form_field', $field->id, ['version_id' => $field->form_version_id]);
+
+            return $updated;
+        });
     }
 
     public function delete(FormField $field): void
@@ -68,7 +88,14 @@ class FormFieldService
         if ($field->version->is_published) {
             throw new BusinessException('Campos de versões publicadas não podem ser removidos', 'field_removal_forbidden');
         }
-        $this->formFieldRepository->delete($field);
+        DB::transaction(function () use ($field) {
+            if ($this->lockVersion($field->version)->is_published) {
+                throw new BusinessException('Campos de versões publicadas não podem ser removidos', 'field_removal_forbidden');
+            }
+            $field->refresh();
+            $this->audit->record('DELETE_FIELD', $field->version->form->tenant_id, 'form_field', $field->id, ['version_id' => $field->form_version_id]);
+            $this->formFieldRepository->delete($field);
+        });
     }
 
     public function requireVersion(int $tenantId, int $formId, int $versionId): FormVersion
@@ -86,5 +113,11 @@ class FormFieldService
         if ($version->is_published) {
             throw new BusinessException('Versão não pode ser editada');
         }
+    }
+
+    private function lockVersion(FormVersion $version): FormVersion
+    {
+        return $this->formVersionRepository->findInTenant($version->form->tenant_id, $version->form_id, $version->id, true)
+            ?? throw new NotFoundException;
     }
 }

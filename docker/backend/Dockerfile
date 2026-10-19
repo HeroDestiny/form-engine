@@ -6,7 +6,7 @@ FROM composer:${COMPOSER_VERSION} AS composer
 
 # Imagem base - FPM para uso com Nginx
 # Usando PHP 8.5
-FROM php:8.5-fpm-alpine
+FROM php:8.5-fpm-alpine AS development
 
 # Labels de metadata
 LABEL maintainer="form-engine-team"
@@ -98,4 +98,19 @@ USER appuser
 EXPOSE 9000
 
 # Comando padrão: iniciar PHP-FPM
+CMD ["php-fpm"]
+
+# Production contains application code and dependencies, without host source mounts.
+FROM development AS production
+USER root
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" && \
+    printf 'display_errors=Off\nlog_errors=On\nerror_log=/proc/self/fd/2\nopcache.validate_timestamps=0\n' > "$PHP_INI_DIR/conf.d/zz-production.ini"
+COPY --chown=appuser:appuser . /var/www
+RUN install -d -o appuser -g appuser vendor storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+USER appuser
+RUN composer install --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative --no-scripts && \
+    php artisan package:discover --ansi
+COPY --chmod=755 production-entrypoint.sh /usr/local/bin/production-entrypoint
+ENV APP_ENV=production APP_DEBUG=false LOG_CHANNEL=stderr
+ENTRYPOINT ["production-entrypoint"]
 CMD ["php-fpm"]

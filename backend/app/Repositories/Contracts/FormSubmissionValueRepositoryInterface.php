@@ -7,4 +7,6 @@ use App\Models\FormSubmissionValue;
 interface FormSubmissionValueRepositoryInterface
 {
     public function create(array $data): FormSubmissionValue;
+
+    public function deleteForSubmission(int $submissionId): void;
 }

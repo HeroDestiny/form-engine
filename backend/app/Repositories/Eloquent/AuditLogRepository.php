@@ -4,11 +4,13 @@ namespace App\Repositories\Eloquent;
 
 use App\Models\AuditLog;
 use App\Models\Form;
+use App\Models\FormField;
 use App\Models\FormSubmission;
 use App\Models\FormVersion;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Repositories\Contracts\AuditLogRepositoryInterface;
+use Carbon\CarbonImmutable;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
@@ -19,7 +21,7 @@ class AuditLogRepository implements AuditLogRepositoryInterface
         $query = AuditLog::query()
             ->with('user')
             ->where('tenant_id', $tenantId)
-            ->orderByDesc('created_at');
+            ->orderByDesc('created_at')->orderByDesc('id');
 
         if (! empty($filters['action'])) {
             $query->where('action', $filters['action']);
@@ -34,10 +36,14 @@ class AuditLogRepository implements AuditLogRepositoryInterface
             $query->where('entity_id', (int) $filters['entity_id']);
         }
         if (! empty($filters['date_from'])) {
-            $query->where('created_at', '>=', $filters['date_from']);
+            $query->where('created_at', '>=', CarbonImmutable::parse($filters['date_from'], 'UTC')->utc()->toDateTimeString());
         }
         if (! empty($filters['date_to'])) {
-            $query->where('created_at', '<=', $filters['date_to']);
+            $end = CarbonImmutable::parse($filters['date_to'], 'UTC')->utc();
+            if (strlen($filters['date_to']) === 10) {
+                $end = $end->endOfDay();
+            }
+            $query->where('created_at', '<=', $end->toDateTimeString());
         }
 
         return $query->paginate($perPage);
@@ -77,7 +83,14 @@ class AuditLogRepository implements AuditLogRepositoryInterface
             return false;
         }
 
-        return $modelClass::query()->where('id', $log->entity_id)->exists();
+        $query = $modelClass::query()->whereKey($log->entity_id);
+
+        return match ($log->entity_type) {
+            'tenant' => $query->whereKey($log->tenant_id)->exists(),
+            'form_field' => $query->whereHas('version.form', fn ($form) => $form->where('tenant_id', $log->tenant_id))->exists(),
+            'form_version' => $query->whereHas('form', fn ($form) => $form->where('tenant_id', $log->tenant_id))->exists(),
+            default => $query->where('tenant_id', $log->tenant_id)->exists(),
+        };
     }
 
     public function relatedActionsCount(AuditLog $log): int
@@ -101,6 +114,7 @@ class AuditLogRepository implements AuditLogRepositoryInterface
             'user' => User::class,
             'form' => Form::class,
             'form_version' => FormVersion::class,
+            'form_field' => FormField::class,
             'form_submission' => FormSubmission::class,
             default => null,
         };

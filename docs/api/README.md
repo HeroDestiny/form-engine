@@ -33,6 +33,14 @@ Produção:       https://api.formengine.com/api
 - **Encoding:** UTF-8
 - **Formato de Data:** ISO 8601 (`2026-03-22T19:30:00Z`)
 
+JSON malformado, raiz escalar ou lista não vazia recebe 400 antes de executar a operação. Um objeto vazio continua permitido quando o endpoint aceita entrada vazia; uma lista vazia é aceita como entrada vazia por compatibilidade. Caracteres NUL em textos ou chaves, inclusive em opções aninhadas e filtros, recebem 422, sem remoção silenciosa. Datas de calendário exigem um dia válido entre os anos 0001 e 9999; filtros de auditoria também respeitam essa faixa após conversão para UTC.
+
+Nos detalhes de submissão, `value` preserva o valor original. Select/radio acrescentam `value_label`, checkbox acrescenta `value_labels` e datas acrescentam `value_formatted` em `dd/mm/aaaa`. Códigos como `01` e `1` são distintos nos detalhes e no CSV.
+
+Conflitos dos índices únicos de slug, e-mail no tenant, nome de formulário no tenant e nome de campo na versão retornam 422, inclusive em requisições concorrentes. Erros HTTP da API, incluindo 404/405, seguem o envelope abaixo e preservam cabeçalhos como `Allow`; falhas internas retornam 500 sem detalhes de implementação. O logout registra `LOGOUT` e revoga somente o token atual na mesma transação: se a auditoria falhar, a revogação é revertida.
+
+Os endereços de staging e produção acima são exemplos de configuração; esses ambientes não estão provisionados.
+
 ### Padrão de Resposta
 
 Todas as respostas seguem o mesmo padrão:
@@ -109,6 +117,8 @@ curl -X POST https://api.formengine.com/api/auth/logout \
 
 ## Endpoints
 
+As respostas listadas por endpoint destacam os resultados específicos do fluxo. Os erros transversais descritos no início também se aplicam: 400 para JSON inválido, 413 para corpo excessivo, 422 para validação e 500 para falhas internas; operações protegidas exigem autenticação, tenant ativo e permissões correspondentes.
+
 ### Resumo por Categoria
 
 | Categoria | Endpoints | Autenticação |
@@ -116,21 +126,21 @@ curl -X POST https://api.formengine.com/api/auth/logout \
 | [Autenticação](#autenticação-1) | 3 | Parcial |
 | [Tenants](#tenants) | 3 | Admin Sistema |
 | [Usuários](#usuários) | 3 | Admin |
-| [Formulários](#formulários) | 4 | User+ |
+| [Formulários](#formulários) | 5 | Conforme operação |
 | [Versões](#versões) | 3 | Manager+ |
 | [Campos](#campos) | 4 | Manager+ |
-| [Submissões](#submissões) | 5 | User+ |
+| [Submissões](#submissões) | 7 | Autenticado; rascunhos restritos ao proprietário |
 | [Exportação](#exportação) | 1 | Manager+ |
 | [Auditoria](#auditoria) | 2 | Admin |
 
-**Total:** 29 endpoints
+**Total:** 31 operações (método + caminho). A tabela resume categorias; permissões de leitura e escrita variam por operação. `admin-sistema` também satisfaz as permissões `admin`, mantendo o isolamento por tenant.
 
 ---
 
 ## Autenticação
 
 ### POST `/auth/login`
-Autentica usuário e retorna token.
+Autentica usuário e retorna token. `tenant_slug` é obrigatório quando o e-mail existe em mais de um tenant; `0` é um slug válido. Usuário e tenant devem estar ativos. A expiração padrão é 60 minutos, configurável por `SANCTUM_EXPIRATION`; `expires_in` é informado em segundos.
 
 **Permissões:** Público
 
@@ -138,16 +148,17 @@ Autentica usuário e retorna token.
 ```json
 {
   "email": "string (required)",
-  "password": "string (required)"
+  "password": "string (required, max:72 bytes UTF-8, sem caracteres nulos)",
+  "tenant_slug": "string (optional, max:100, letras minúsculas, números e hífen)"
 }
 ```
 
-**Responses:** `200`, `401`, `403`, `422`
+**Responses:** `200`, `400`, `401`, `403`, `422`, `429`
 
 ---
 
 ### POST `/auth/logout`
-Invalida o token atual.
+Invalida somente o token atual e registra `LOGOUT` atomicamente. Continua permitido com tenant desativado; falha na auditoria reverte a revogação.
 
 **Permissões:** Autenticado
 
@@ -188,7 +199,7 @@ Cria novo tenant.
 ```json
 {
   "name": "string (required, min:3)",
-  "slug": "string (required, pattern: ^[a-z0-9-]+$)"
+  "slug": "string (required, max:100, pattern: ^[a-z0-9-]+$)"
 }
 ```
 
@@ -233,7 +244,7 @@ Cria novo usuário.
 {
   "name": "string (required, min:3)",
   "email": "string (required, email)",
-  "password": "string (required, min:8)",
+  "password": "string (required, min:8 caracteres, max:72 bytes UTF-8, sem caracteres nulos)",
   "role": "enum (required): admin|manager|user"
 }
 ```
@@ -271,6 +282,11 @@ Lista formulários disponíveis.
 - `order` (enum): `asc|desc`
 
 **Responses:** `200`, `401`
+
+---
+
+### POST `/tenants/{tenantId}/forms`
+Cria formulário com a primeira versão draft no tenant informado. Recebe o mesmo body de `POST /forms` e retorna 201 com `data.form` e `data.version`. Exige papel manager/admin (ou admin-sistema) e tenant da URL igual ao do usuário autenticado; esta rota não permite criar em outro tenant.
 
 ---
 
@@ -343,7 +359,7 @@ Publica versão draft.
 
 **Permissões:** Manager+
 
-**Responses:** `200`, `401`, `403`, `422`
+**Responses:** `200`, `400`, `401`, `403`, `422`, `429`
 
 ---
 
@@ -427,11 +443,17 @@ Salva rascunho (preenchimento parcial).
 
 **Permissões:** User+
 
-**Body:** Mesmo schema de submit, mas sem validação de campos obrigatórios
+**Body:** Mesmo schema de submit, mas sem exigir preenchimento dos campos obrigatórios. `values` pode ser omitido ao criar um rascunho vazio; valores fornecidos ainda são validados quanto a tipo, opções, calendário e limites.
 
 **Responses:** `201`, `401`
 
 ---
+
+### PATCH `/forms/{formId}/drafts/{submissionId}`
+Atualiza um rascunho do próprio usuário na versão original. O campo `values` é obrigatório e substitui todas as respostas; `{"values": {}}` limpa as respostas. Um body `{}` recebe 422. `version_id` não é permitido. Retorna 200 com `data.draft`. Outro proprietário ou tenant recebe 404.
+
+### POST `/forms/{formId}/drafts/{submissionId}/submit`
+Finaliza o rascunho do próprio usuário, preservando ID e versão. Recebe `{"values": {...}}` completo e valida os campos obrigatórios da versão original. Retorna 200 com `data.submission`; validação inválida retorna 422 e acesso a outro proprietário/tenant retorna 404.
 
 ### GET `/forms/{formId}/drafts`
 Lista rascunhos do usuário.
@@ -493,7 +515,7 @@ Exporta submissões para CSV.
 
 **Response:** Arquivo CSV com header de download
 
-**Responses:** `200`, `401`, `403`, `422`
+**Responses:** `200`, `400`, `401`, `403`, `422`, `429`
 
 ---
 
@@ -590,7 +612,13 @@ Visualiza detalhes do log.
 - `date`: Data
 - `select`: Seleção única (requer options)
 - `radio`: Opções radio (requer options)
-- `checkbox`: Múltipla escolha (requer options)
+- `checkbox`: Múltipla escolha (requer options). Envie um array de strings com os valores das opções, por exemplo `["opt1", "opt2"]`. O armazenamento utiliza JSON em texto; os detalhes da submissão retornam um array, e o CSV apresenta os labels das escolhas.
+
+### Atualização dos fluxos — 10/10/2026
+
+Criação de submissão/draft aceita `version_id` opcional para fixar a versão publicada exibida ao usuário. Sem esse campo, usa a última versão publicada. Rascunhos existentes podem ser editados com `PATCH /api/forms/{formId}/drafts/{submissionId}` e finalizados com `POST /api/forms/{formId}/drafts/{submissionId}/submit`. Ambos exigem `{"values": {...}}` e proíbem `version_id`; edição substitui todas as respostas, e finalização valida os obrigatórios da versão original. Apenas o proprietário pode escrever.
+
+Exportação aceita `separator` como vírgula ou ponto e vírgula. Auditoria é gerada automaticamente nos fluxos e protegida contra alteração/exclusão. Consulte as decisões de [arquitetura](../arquitetura.md) e o [guia de testes](../testes.md).
 
 ---
 
@@ -729,24 +757,64 @@ curl -X POST http://localhost:8000/api/submissions/export \
 
 ---
 
+## Validação de consultas e paginação
+
+Listagens paginadas (`/submissions`, `/audit-logs`, `/admin/tenants` e `/tenants/{tenantId}/users`) aceitam `page` de 1 a 2147483647 e `per_page` de 1 a 100 (padrões: 1 e 20). Valores inválidos retornam 422 com os campos em `errors`; não são convertidos silenciosamente. Uma página após a última retorna lista vazia, total preservado e `from`/`to` nulos.
+
+Submissões combinam filtros por formulário, versão, usuário, status e período. IDs devem ser inteiros positivos de 32 bits; IDs inexistentes ou de outro tenant resultam em lista vazia. Datas exigem `YYYY-MM-DD` e incluem o dia inteiro: `submitted_at` para finais e `created_at` para rascunhos. `user_id` não amplia acesso de usuários finais.
+
+Auditoria aceita datas ou timestamps ISO 8601 com segundos e fuso, normalizados para UTC. Data final sem hora inclui todo o dia; timestamp final é exato. Datas finais anteriores à inicial retornam 422. Listagens cronológicas usam ID como desempate, evitando repetição entre páginas com datas iguais.
+
+Formulários aceitam `search` (até 255 caracteres, sem distinção de caixa), `sort=name|created_at`, `order=asc|desc` e `scope=available|all`. O escopo `all` só amplia resultados para manager/admin/admin-sistema. A listagem mantém coleção e total.
+
+## Limites de entrada e exportação
+
+As requisições da API têm limite de corpo de 2 MiB, com resposta 413 em JSON no middleware e no Nginx. Validações de campos/estruturas continuam retornando 422, sem alterações parciais.
+
+| Entrada | Limite |
+|---|---|
+| Texto | 1.000 caracteres |
+| Texto longo | 10.000 caracteres |
+| E-mail | 254 caracteres |
+| Número | -10^15 a 10^15 |
+| Data de campo/filtro de exportação | Dia válido em `YYYY-MM-DD`, anos 0001 a 9999 |
+| Campos por versão / valores por envio | 100 |
+| Nome técnico do campo | 100 caracteres |
+| Opções por campo / escolhas de checkbox | 100, sem duplicação |
+| Valor e rótulo de opção | 255 caracteres |
+| Senha recebida | Até 72 bytes UTF-8, sem NUL; criação exige ao menos 8 caracteres |
+| Slug de login | 100 caracteres |
+
+Texto conta caracteres, não bytes. Limites também se aplicam aos rascunhos, sua atualização e finalização. O limite de campos é verificado sob lock da versão; editar um campo existente continua permitido. Dados históricos não são truncados nem excluídos.
+
+CSV é limitado a 10.000 registros, 100 versões, 500 colunas (incluindo 5 fixas) e 25 MiB. `EXPORT_MAX_ROWS` e `EXPORT_MAX_BYTES` permitem reduzir esses tetos; valores configurados são limitados a 1..10000 e 1..26214400. Exceder qualquer teto retorna 422 com orientação para restringir filtros, antes do download e sem log de sucesso.
+
+A seleção inicial lê apenas IDs e IDs de versões, até o limite + 1. Esses IDs fixam os participantes e a ordem da exportação; novas submissões não entram durante a geração. Valores/usuários são lidos em lotes de 25. Cabeçalhos carregam apenas metadados dos campos, sem opções; um cache de até dois esquemas completos permite mapear opções sem reter todos os esquemas em memória. O CSV é escrito em arquivo temporário do sistema e entregue por `fpassthru`, sem formar uma string com o arquivo inteiro. O arquivo fecha após a transmissão ou em erro; falha ao auditar também libera o recurso. `EXPORT_DATA` registra linhas e bytes efetivamente preparados, não confirma que o cliente terminou de baixar. Não há snapshot transacional de alterações administrativas em nomes de usuários durante a exportação.
+
+Células textuais com prefixos de fórmula (`=`, `+`, `-`, `@` e variantes de largura completa), controles iniciais ou espaços seguidos desses prefixos recebem tabulação inicial dentro da célula delimitada. Isso inclui rótulos, nomes/e-mails, valores e labels de opções; o banco permanece intacto. A tabulação fica no dado exportado, inclusive para textos negativos, e deve ser considerada por consumidores programáticos. A proteção segue a orientação para visualização no Excel da [OWASP](https://community.owasp.org/attacks/CSV_Injection); os testes verificam o CSV serializado, não execução em Excel/LibreOffice. Não há garantia universal para todos os programas ou para arquivos editados e regravados pelo usuário.
+
 ## Rate Limiting
 
-**Limites por IP (padrão Laravel):**
-- Autenticação: 5 tentativas / minuto
-- API geral: 60 requisições / minuto
+O login permite 5 tentativas por minuto por IP e por combinação de e-mail/tenant,
+incluindo sucessos e entradas inválidas. Ambos os limites usam o cache compartilhado
+(Redis no Docker) e são configuráveis por `LOGIN_ATTEMPTS_PER_MINUTE`.
+O bloqueio retorna 429, `Retry-After` em segundos e registra `LOGIN_THROTTLED` sem credenciais.
+Não há limite geral de 60 requisições aplicado nesta etapa.
 
 **Headers de resposta:**
 ```
-X-RateLimit-Limit: 60
-X-RateLimit-Remaining: 59
+X-RateLimit-Limit: 5
+X-RateLimit-Remaining: 0
 X-RateLimit-Reset: 1616425200
+Retry-After: 60
 ```
 
 **Resposta ao exceder:**
 ```json
 {
   "success": false,
-  "message": "Too Many Attempts.",
+  "data": null,
+  "message": "Muitas tentativas. Tente novamente em 60 segundos.",
   "errors": null
 }
 ```
@@ -812,5 +880,5 @@ Versões futuras serão expostas via URL:
 
 ---
 
-**Última atualização:** 2026-03-31
+**Última atualização:** 2026-10-17
 **Versão da API:** 1.0.0

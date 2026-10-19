@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ListFormsRequest;
 use App\Http\Requests\StoreFormRequest;
 use App\Http\Requests\UpdateStatusRequest;
 use App\Services\Forms\FormService;
@@ -13,13 +14,12 @@ class FormController extends Controller
 {
     public function __construct(private readonly FormService $formService) {}
 
-    public function index(Request $request): JsonResponse
+    public function index(ListFormsRequest $request): JsonResponse
     {
-        $search = $request->filled('search') ? $request->string('search')->toString() : null;
-        $sort = $request->string('sort')->toString() ?: 'name';
-        $order = $request->string('order')->toString() ?: 'asc';
-
-        $scope = $request->string('scope')->toString();
+        $search = $request->validated('search');
+        $sort = $request->validated('sort') ?: 'name';
+        $order = $request->validated('order') ?: 'asc';
+        $scope = $request->validated('scope') ?: '';
         $forms = $this->formService->listForUser($request->user(), $search, $sort, $order, $scope);
 
         return response()->json([

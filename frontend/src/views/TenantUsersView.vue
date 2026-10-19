@@ -1,17 +1,17 @@
 <script setup>
 import { onMounted, reactive } from 'vue'
-import { useRouter } from 'vue-router'
-import { getCurrentUser, listTenantUsers, createTenantUser, updateTenantUserStatus } from '../api'
+import { useQueryListing } from '../composables/useQueryListing.js'
+import ListContent from '../components/ListContent.vue'
+import ListPagination from '../components/ListPagination.vue'
+import { listTenantUsers, createTenantUser, updateTenantUserStatus } from '../api'
 
-const router = useRouter()
+import { session } from '../auth/session.js'
 
 const state = reactive({
-  loading: false,
   error: '',
-  users: [],
-  pagination: null,
+  message: '',
   saving: false,
-  tenant: null,
+  tenant: session.tenant,
 })
 
 const form = reactive({
@@ -21,41 +21,15 @@ const form = reactive({
   role: 'user',
 })
 
-async function loadContextAndUsers() {
-  state.loading = true
-  state.error = ''
-
-  try {
-    const me = await getCurrentUser()
-    const user = me?.data?.user ?? null
-    const tenant = me?.data?.tenant ?? null
-
-    if (!user || !tenant) {
-      await router.replace('/login')
-      return
-    }
-
-    if (user.role !== 'admin') {
-      state.error = 'Apenas admin do tenant pode gerenciar usuários.'
-      return
-    }
-
-    state.tenant = tenant
-
-    const data = await listTenantUsers(tenant.id, { per_page: 50 })
-    state.users = data?.data?.users ?? []
-    state.pagination = data?.data?.pagination ?? null
-  } catch (error) {
-    state.error = error?.body?.message || 'Erro ao carregar usuários.'
-  } finally {
-    state.loading = false
-  }
-}
+const { state: listing, perPage, load: loadContextAndUsers, setPage, setPerPage } = useQueryListing(
+  (params, options) => listTenantUsers(session.tenant.id, params, options), 'users',
+)
 
 async function handleCreateUser() {
   if (!state.tenant) return
   state.saving = true
   state.error = ''
+  state.message = ''
 
   try {
     await createTenantUser(state.tenant.id, {
@@ -70,7 +44,9 @@ async function handleCreateUser() {
     form.password = ''
     form.role = 'user'
 
+    state.message = 'Usuário criado com sucesso.'
     await loadContextAndUsers()
+    if (listing.pagination) await setPage(listing.pagination.last_page)
   } catch (error) {
     if (error.status === 422 && error.body?.errors) {
       const errors = error.body.errors
@@ -84,13 +60,18 @@ async function handleCreateUser() {
 }
 
 async function toggleUserStatus(user) {
+  if (!window.confirm(`${user.is_active ? 'Desativar' : 'Ativar'} o usuário ${user.name}? Seus dados e submissões serão preservados.`)) return
   if (!state.tenant) return
   state.error = ''
+  state.message = ''
+  state.saving = true
   try {
     await updateTenantUserStatus(state.tenant.id, user.id, !user.is_active)
     await loadContextAndUsers()
   } catch (error) {
     state.error = error?.body?.message || 'Erro ao alterar status do usuário.'
+  } finally {
+    state.saving = false
   }
 }
 
@@ -100,83 +81,67 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="brand">
-        <span class="brand-mark">FE</span>
-        <div class="brand-text">
-          <h1>Form Engine</h1>
-          <p>Usuários do tenant</p>
-        </div>
+  <section class="panel panel-forms">
+    <h1>Usuários</h1>
+    <p class="panel-subtitle">Administração de usuários do tenant atual.</p>
+
+    <p v-if="state.message" class="feedback" role="status">{{ state.message }}</p>
+    <p v-if="state.error" class="feedback error" role="alert">{{ state.error }}</p>
+
+    <div class="forms-grid">
+      <div class="form-card">
+        <h3>Lista</h3>
+        <ListContent :loading="listing.loading" :error="listing.error" :empty="!listing.items.length" empty-message="Nenhum usuário cadastrado." @retry="loadContextAndUsers">
+          <ul class="fields-list">
+            <li v-for="u in listing.items" :key="u.id" class="field-row">
+              <div class="field-row-main">
+                <strong>{{ u.name }}</strong>
+                <span class="field-row-meta">
+                  {{ u.email }} · {{ u.role }} · {{ u.is_active ? 'ativo' : 'inativo' }}
+                </span>
+              </div>
+              <button class="ghost-button" type="button" :disabled="state.saving || listing.loading || String(u.id) === String(session.user.id)" @click="toggleUserStatus(u)">
+                {{ u.is_active ? 'Desativar' : 'Ativar' }}
+              </button>
+            </li>
+          </ul>
+        </ListContent>
+        <ListPagination :pagination="listing.pagination" :loading="listing.loading" :per-page="perPage" @page="setPage" @per-page="setPerPage" />
       </div>
 
-      <button class="ghost-button" type="button" @click="router.push('/')">Voltar</button>
-    </header>
+      <div class="form-card">
+        <h3>Novo usuário</h3>
+        <form class="form" @submit.prevent="handleCreateUser">
+          <label class="field">
+            <span>Nome</span>
+            <input v-model="form.name" type="text" required minlength="3" maxlength="255" />
+          </label>
 
-    <main class="app-main">
-      <section class="panel panel-forms">
-        <h2>Usuários</h2>
-        <p class="panel-subtitle">Administração de usuários do tenant atual.</p>
+          <label class="field">
+            <span>E-mail</span>
+            <input v-model="form.email" type="email" required />
+          </label>
 
-        <p v-if="state.error" class="feedback error">{{ state.error }}</p>
-        <p v-if="state.loading" class="panel-subtitle">Carregando usuários…</p>
+          <label class="field">
+            <span>Senha</span>
+            <input v-model="form.password" type="password" required minlength="8" />
+          </label>
 
-        <div class="forms-grid" v-if="!state.loading">
-          <div class="form-card">
-            <h3>Lista</h3>
-            <div v-if="!state.users.length" class="empty-state">
-              <p>Nenhum usuário cadastrado.</p>
-            </div>
-            <ul v-else class="fields-list">
-              <li v-for="u in state.users" :key="u.id" class="field-row">
-                <div class="field-row-main">
-                  <strong>{{ u.name }}</strong>
-                  <span class="field-row-meta">
-                    {{ u.email }} · {{ u.role }} · {{ u.is_active ? 'ativo' : 'inativo' }}
-                  </span>
-                </div>
-                <button class="ghost-button" type="button" @click="toggleUserStatus(u)">
-                  {{ u.is_active ? 'Desativar' : 'Ativar' }}
-                </button>
-              </li>
-            </ul>
-          </div>
+          <label class="field">
+            <span>Papel</span>
+            <select v-model="form.role">
+              <option value="user">user</option>
+              <option value="manager">manager</option>
+              <option value="admin">admin</option>
+            </select>
+          </label>
 
-          <div class="form-card">
-            <h3>Novo usuário</h3>
-            <form class="form" @submit.prevent="handleCreateUser">
-              <label class="field">
-                <span>Nome</span>
-                <input v-model="form.name" type="text" required minlength="3" maxlength="255" />
-              </label>
-
-              <label class="field">
-                <span>E-mail</span>
-                <input v-model="form.email" type="email" required />
-              </label>
-
-              <label class="field">
-                <span>Senha</span>
-                <input v-model="form.password" type="password" required minlength="8" />
-              </label>
-
-              <label class="field">
-                <span>Papel</span>
-                <select v-model="form.role">
-                  <option value="user">user</option>
-                  <option value="manager">manager</option>
-                  <option value="admin">admin</option>
-                </select>
-              </label>
-
-              <button class="primary-button" type="submit" :disabled="state.saving">
-                <span v-if="!state.saving">Criar usuário</span>
-                <span v-else>Salvando…</span>
-              </button>
-            </form>
-          </div>
-        </div>
-      </section>
-    </main>
-  </div>
+          <button class="primary-button" type="submit" :disabled="state.saving || listing.loading">
+            <span v-if="!state.saving">Criar usuário</span>
+            <span v-else>Salvando…</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </section>
 </template>
