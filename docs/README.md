@@ -10,6 +10,7 @@
 | [Guia da API](api/README.md) | Autenticação, operações, exemplos e limites. |
 | [OpenAPI](api/openapi.yaml) | Contrato formal das 31 operações. |
 | [Coleção Postman](api/postman-collection.json) | Requisições para testar a API. |
+| [Conferência funcional da v1](fechamento-funcional-v1.md) | Matriz dos 21 casos de uso, implementações e evidências de validação. |
 | [Testes](testes.md) | Execução das suítes isoladas e verificações de qualidade. |
 | [Operação](operacao-producao.md) | Configuração de deploy, saúde, backup, restauração e rollback. |
 | [Scripts](../scripts/README.md) | Comandos de desenvolvimento e operação. |

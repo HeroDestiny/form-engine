@@ -95,6 +95,9 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Test frontend
+        run: npm test
+
       - name: Audit frontend dependencies
         run: npm audit --audit-level=high
 

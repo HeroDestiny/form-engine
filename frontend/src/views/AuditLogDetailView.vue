@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { auditEntityPath } from '../utils/auditEntity.js'
 import { getAuditLog } from '../api'
 
 const route = useRoute()
@@ -38,59 +39,45 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="brand">
-        <span class="brand-mark">FE</span>
-        <div class="brand-text">
-          <h1>Form Engine</h1>
-          <p>Detalhe de auditoria</p>
-        </div>
+  <section class="panel panel-forms">
+    <template v-if="state.loading">
+      <p class="panel-subtitle">Carregando registro…</p>
+    </template>
+
+    <template v-else-if="state.error">
+      <p class="feedback error" role="alert">{{ state.error }}</p>
+    </template>
+
+    <template v-else-if="state.payload">
+      <h1>{{ state.payload.log.action }}</h1>
+      <p class="panel-subtitle">
+        {{ state.payload.log.entity_type }}#{{ state.payload.log.entity_id }} · {{ state.payload.log.created_at }}
+      </p>
+
+      <p class="panel-subtitle">IP: {{ state.payload.log.ip_address || 'Não registrado' }} · Agente de navegação: {{ state.payload.log.user_agent || 'Não registrado' }}</p>
+      <RouterLink v-if="auditEntityPath(state.payload)" class="ghost-button" :to="{ path: auditEntityPath(state.payload), query: { returnTo: route.fullPath } }">Abrir entidade relacionada</RouterLink>
+      <div class="form-card" style="margin-top: 1rem;">
+        <h3>Usuário</h3>
+        <p v-if="!state.payload.user" class="panel-subtitle">Sem usuário associado.</p>
+        <p v-else class="panel-subtitle">
+          {{ state.payload.user.name }} ({{ state.payload.user.email }}) · {{ state.payload.user.role }} ·
+          {{ state.payload.user.is_active ? 'ativo' : 'inativo' }}
+        </p>
       </div>
 
-      <button class="ghost-button" type="button" @click="router.push('/audit-logs')">Voltar</button>
-    </header>
+      <div class="form-card" style="margin-top: 1rem;">
+        <h3>Metadata</h3>
+        <pre style="font-size: 0.8rem; white-space: pre-wrap;">{{ JSON.stringify(state.payload.log.metadata, null, 2) }}</pre>
+      </div>
 
-    <main class="app-main">
-      <section class="panel panel-forms">
-        <template v-if="state.loading">
-          <p class="panel-subtitle">Carregando registro…</p>
-        </template>
+      <p class="panel-subtitle" style="margin-top: 1rem;">
+        Entidade ainda existe? {{ state.payload.entity_exists ? 'sim' : 'não' }} · Ações relacionadas:
+        {{ state.payload.related_actions_count }}
+      </p>
+    </template>
 
-        <template v-else-if="state.error">
-          <p class="feedback error">{{ state.error }}</p>
-        </template>
-
-        <template v-else-if="state.payload">
-          <h2>{{ state.payload.log.action }}</h2>
-          <p class="panel-subtitle">
-            {{ state.payload.log.entity_type }}#{{ state.payload.log.entity_id }} · {{ state.payload.log.created_at }}
-          </p>
-
-          <div class="form-card" style="margin-top: 1rem;">
-            <h3>Usuário</h3>
-            <p v-if="!state.payload.user" class="panel-subtitle">Sem usuário associado.</p>
-            <p v-else class="panel-subtitle">
-              {{ state.payload.user.name }} ({{ state.payload.user.email }}) · {{ state.payload.user.role }} ·
-              {{ state.payload.user.is_active ? 'ativo' : 'inativo' }}
-            </p>
-          </div>
-
-          <div class="form-card" style="margin-top: 1rem;">
-            <h3>Metadata</h3>
-            <pre style="font-size: 0.8rem; white-space: pre-wrap;">{{ JSON.stringify(state.payload.log.metadata, null, 2) }}</pre>
-          </div>
-
-          <p class="panel-subtitle" style="margin-top: 1rem;">
-            Entidade ainda existe? {{ state.payload.entity_exists ? 'sim' : 'não' }} · Ações relacionadas:
-            {{ state.payload.related_actions_count }}
-          </p>
-        </template>
-
-        <template v-else>
-          <p class="panel-subtitle">Registro não encontrado.</p>
-        </template>
-      </section>
-    </main>
-  </div>
+    <template v-else>
+      <p class="panel-subtitle">Registro não encontrado.</p>
+    </template>
+  </section>
 </template>
