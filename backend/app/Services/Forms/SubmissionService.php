@@ -32,12 +32,56 @@ class SubmissionService
         private readonly AuditRecorder $audit,
     ) {}
 
-    public function buildRules(FormVersion $version, bool $partial = false): array
+    public function isConditionMet(?array $condition, array $values, array $allFields = [], array &$visited = []): bool
+    {
+        if (empty($condition) || empty($condition['field'])) {
+            return true;
+        }
+
+        $target = $condition['field'];
+        if (in_array($target, $visited, true)) {
+            return true;
+        }
+        $visited[] = $target;
+
+        if (! empty($allFields)) {
+            $parent = collect($allFields)->firstWhere('name', $target);
+            if ($parent) {
+                $parentCond = SubmissionFieldValue::condition($parent);
+                if ($parentCond && ! $this->isConditionMet($parentCond, $values, $allFields, $visited)) {
+                    return false;
+                }
+            }
+        }
+
+        $val = $values[$target] ?? null;
+        $op = $condition['operator'] ?? 'equals';
+        $expected = (string) ($condition['value'] ?? '');
+
+        return match ($op) {
+            'filled' => ! empty($val) || (is_string($val) && trim($val) !== '') || is_numeric($val),
+            'empty' => empty($val) && (! is_numeric($val) || $val === ''),
+            'equals' => is_array($val) ? in_array($expected, array_map('strval', $val), true) : (string) ($val ?? '') === $expected,
+            'not_equals' => is_array($val) ? ! in_array($expected, array_map('strval', $val), true) : (string) ($val ?? '') !== $expected,
+            'in' => is_array($val)
+                ? (bool) array_intersect(array_map('trim', explode(',', $expected)), array_map('strval', $val))
+                : in_array((string) ($val ?? ''), array_map('trim', explode(',', $expected)), true),
+            default => true,
+        };
+    }
+
+    public function buildRules(FormVersion $version, bool $partial = false, array $submittedValues = []): array
     {
         $rules = [];
+        $allFields = $version->fields->all();
 
         foreach ($version->fields as $field) {
-            $fieldRules = $partial ? ['sometimes', 'nullable'] : [$field->is_required ? 'required' : 'nullable'];
+            $condition = SubmissionFieldValue::condition($field);
+            $visited = [];
+            $conditionMet = empty($condition) || $this->isConditionMet($condition, $submittedValues, $allFields, $visited);
+            $isRequired = $field->is_required && $conditionMet;
+
+            $fieldRules = ($partial || ! $isRequired) ? ['sometimes', 'nullable'] : ['required'];
 
             if (in_array($field->type, ['text', 'textarea', 'email', 'select', 'radio'], true)) {
                 $fieldRules[] = 'string';
@@ -62,15 +106,37 @@ class SubmissionService
             if ($field->type === 'date') {
                 $fieldRules[] = new CalendarDate;
             }
-            if (in_array($field->type, ['select', 'radio'], true) && is_array($field->options)) {
-                $fieldRules[] = Rule::in(array_column($field->options, 'value'));
+
+            $choices = SubmissionFieldValue::choices($field);
+            if (in_array($field->type, ['select', 'radio'], true) && ! empty($choices)) {
+                $fieldRules[] = Rule::in(array_column($choices, 'value'));
             }
 
             if ($field->type === 'checkbox') {
                 $fieldRules[] = 'array';
                 $fieldRules[] = 'list';
                 $fieldRules[] = 'max:'.config('limits.options_per_field');
-                $rules['values.'.$field->name.'.*'] = ['string', 'max:255', 'distinct:strict', Rule::in(array_column($field->options ?? [], 'value'))];
+                if (! empty($choices)) {
+                    $rules['values.'.$field->name.'.*'] = ['string', 'max:255', 'distinct:strict', Rule::in(array_column($choices, 'value'))];
+                }
+            }
+
+            if ($field->type === 'file') {
+                $tenantId = (int) ($version->form?->tenant_id ?? auth()->user()?->tenant_id);
+                $rules['values.'.$field->name] = ($partial || ! $isRequired) ? ['sometimes', 'nullable'] : ['required'];
+                $rules['values.'.$field->name.'.path'] = [
+                    'sometimes',
+                    'string',
+                    'max:500',
+                    'regex:/^tenants\/'.$tenantId.'\/attachments\/[a-zA-Z0-9_\-\.\/]+$/',
+                    function ($attribute, $value, $fail) {
+                        if (str_contains($value, '..')) {
+                            $fail('Caminho de arquivo inválido.');
+                        }
+                    },
+                ];
+                $rules['values.'.$field->name.'.name'] = ['sometimes', 'string', 'max:255'];
+                continue;
             }
 
             $rules['values.'.$field->name] = $fieldRules;
@@ -119,8 +185,15 @@ class SubmissionService
 
     private function persistValues(FormSubmission $submission, FormVersion $version, array $values): void
     {
+        $allFields = $version->fields->all();
         foreach ($version->fields as $field) {
             if (! array_key_exists($field->name, $values)) {
+                continue;
+            }
+
+            $condition = SubmissionFieldValue::condition($field);
+            $visited = [];
+            if ($condition && ! $this->isConditionMet($condition, $values, $allFields, $visited)) {
                 continue;
             }
 
@@ -233,9 +306,14 @@ class SubmissionService
                 'type' => $field->type,
                 'value' => $value,
                 'is_required' => $field->is_required,
+                'condition' => SubmissionFieldValue::condition($field),
+                'section' => SubmissionFieldValue::section($field),
+                'section_description' => SubmissionFieldValue::sectionDescription($field),
+                'width' => SubmissionFieldValue::width($field),
             ];
 
-            if (in_array($field->type, ['select', 'radio'], true) && is_array($field->options)) {
+            $choices = SubmissionFieldValue::choices($field);
+            if (in_array($field->type, ['select', 'radio'], true) && ! empty($choices)) {
                 $item['value_label'] = SubmissionFieldValue::label($field, $value);
             }
             if ($field->type === 'checkbox') {
@@ -244,6 +322,12 @@ class SubmissionService
             if ($field->type === 'date') {
                 $date = $value === null ? false : DateTimeImmutable::createFromFormat('!Y-m-d', $value);
                 $item['value_formatted'] = $date && $date->format('Y-m-d') === $value ? $date->format('d/m/Y') : $value;
+            }
+            if ($field->type === 'file' && ! empty($value)) {
+                $item['file_name'] = is_array($value) ? ($value['name'] ?? null) : basename((string) $value);
+                $item['file_size'] = is_array($value) ? ($value['size'] ?? null) : null;
+                $item['file_mime'] = is_array($value) ? ($value['mime_type'] ?? null) : null;
+                $item['download_url'] = "/api/submissions/{$submission->id}/attachments/{$field->id}";
             }
 
             return $item;

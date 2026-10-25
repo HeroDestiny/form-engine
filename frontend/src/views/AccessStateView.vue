@@ -3,12 +3,19 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { session, signOut } from '../auth/session.js'
 import { safeReturnPath } from '../auth/permissions.js'
+import StatusBadge from '../components/StatusBadge.vue'
 
 const route = useRoute()
 const router = useRouter()
 const sessionError = computed(() => route.name === 'session-error')
 const forbidden = computed(() => route.name === 'forbidden')
-const title = computed(() => sessionError.value ? 'Não foi possível acessar sua conta' : forbidden.value ? 'Acesso restrito' : 'Página não encontrada')
+const title = computed(() => (
+  sessionError.value
+    ? 'Não foi possível verificar sua sessão'
+    : forbidden.value
+      ? 'Acesso restrito'
+      : 'Página não encontrada'
+))
 
 async function handleLogout() {
   const logout = signOut()
@@ -19,9 +26,15 @@ async function handleLogout() {
 
 <template>
   <section class="panel panel-login">
-    <h1>{{ title }}</h1>
+    <div class="card-heading" style="margin-bottom: 0.5rem;">
+      <h1>{{ title }}</h1>
+      <StatusBadge
+        :tone="sessionError ? 'warning' : forbidden ? 'danger' : 'muted'"
+        :label="sessionError ? 'Falha temporária' : forbidden ? '403 Sem permissão' : '404 Não encontrada'"
+      />
+    </div>
     <p class="panel-subtitle" role="status">
-      {{ sessionError ? session.error || 'Verifique sua conexão e tente novamente.' : forbidden ? 'Seu perfil não tem permissão para acessar esta página.' : 'O endereço solicitado não está disponível.' }}
+      {{ sessionError ? session.error || 'Verifique sua conexão com o servidor e tente novamente.' : forbidden ? 'Seu perfil atual não possui permissão para acessar esta funcionalidade.' : 'O endereço solicitado não existe ou foi movido.' }}
     </p>
     <div v-if="sessionError" class="panel-actions">
       <RouterLink class="primary-button" :to="safeReturnPath(route.query.redirect)">Tentar novamente</RouterLink>
