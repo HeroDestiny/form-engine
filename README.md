@@ -5,6 +5,7 @@
 ![Vue](https://img.shields.io/badge/vue-3.x-brightgreen)
 ![Docker](https://img.shields.io/badge/docker-enabled-blue)
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions-black)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## 📖 Visão Geral
 
@@ -321,7 +322,7 @@ O CSV já inclui escaping e proteção contra fórmulas. Para produção, revise
 
 ## 📝 Licença
 
-MIT.
+Este projeto está licenciado sob os termos da licença [MIT](LICENSE).
 
 ## 🐛 Issues
 

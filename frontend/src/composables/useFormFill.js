@@ -1,14 +1,35 @@
 import { computed, reactive, ref } from 'vue'
 import * as api from '../api.js'
-import { fieldValidationErrors, initialValues, sortedFields, submissionValues } from '../utils/formValues.js'
+import { fieldValidationErrors, formFillProgress, initialValues, sortedFields, submissionValues } from '../utils/formValues.js'
+import { filterVisibleFields, pruneHiddenValues } from '../utils/conditionalLogic.js'
 
 export function useFormFill(formId, userId, client = api) {
-  const state = reactive({ loading: false, switching: false, saving: false, submitting: false, form: null, version: null, fields: [], drafts: [], draftsError: '', error: '', fieldErrors: Object.create(null), message: '', activeDraftId: null, completedId: null, ready: false })
+  const state = reactive({
+    loading: false,
+    switching: false,
+    saving: false,
+    autosaving: false,
+    submitting: false,
+    form: null,
+    version: null,
+    fields: [],
+    drafts: [],
+    draftsError: '',
+    error: '',
+    fieldErrors: Object.create(null),
+    message: '',
+    activeDraftId: null,
+    completedId: null,
+    lastSavedAt: null,
+    ready: false,
+  })
   const values = reactive(Object.create(null))
   const baseline = ref('{}')
   const busy = computed(() => state.loading || state.switching || state.saving || state.submitting)
   const dirty = computed(() => JSON.stringify(values) !== baseline.value)
   const canWrite = computed(() => state.ready && state.form?.is_active && !!state.version && !state.completedId && !busy.value)
+  const visibleFields = computed(() => filterVisibleFields(state.fields, values))
+  const progress = computed(() => formFillProgress(visibleFields.value, values))
 
   function replaceValues(next) {
     Object.keys(values).forEach(key => delete values[key])
@@ -33,6 +54,7 @@ export function useFormFill(formId, userId, client = api) {
     state.fieldErrors = Object.create(null)
     state.message = ''
     state.completedId = null
+    state.lastSavedAt = null
     try {
       const form = (await client.getForm(formId))?.data?.form
       if (!form?.is_active) throw new Error('Este formulário não está disponível para preenchimento.')
@@ -42,6 +64,7 @@ export function useFormFill(formId, userId, client = api) {
         if (!detail || detail.submission?.status !== 'draft' || String(detail.form?.id) !== String(formId) || String(detail.user?.id) !== String(userId)) throw new Error('Rascunho não encontrado para sua conta neste formulário.')
         version = detail.version
         saved = detail.values ?? []
+        state.lastSavedAt = detail.submission?.updated_at || detail.submission?.created_at || null
       } else {
         const versions = (await client.listFormVersions(formId))?.data?.versions ?? []
         version = versions.filter(item => item.is_published).sort((a, b) => b.version_number - a.version_number)[0]
@@ -78,14 +101,16 @@ export function useFormFill(formId, userId, client = api) {
     finally { state.switching = false }
   }
 
-  async function save(finalize = false) {
+  async function save(finalize = false, options = {}) {
     if (!canWrite.value) return false
+    const isAutosave = !finalize && !!options.autosave
     state[finalize ? 'submitting' : 'saving'] = true
+    state.autosaving = isAutosave
     state.error = ''
     state.fieldErrors = Object.create(null)
-    state.message = ''
+    if (!isAutosave) state.message = ''
     try {
-      const payload = submissionValues(state.fields, values)
+      const payload = submissionValues(visibleFields.value, pruneHiddenValues(state.fields, values))
       const response = finalize
         ? state.activeDraftId ? await client.finalizeDraft(formId, state.activeDraftId, payload) : await client.submitForm(formId, payload, state.version.id)
         : state.activeDraftId ? await client.updateDraft(formId, state.activeDraftId, payload) : await client.saveDraft(formId, payload, state.version.id)
@@ -94,16 +119,31 @@ export function useFormFill(formId, userId, client = api) {
         state.completedId = response.data.submission.id
         state.ready = false
         state.activeDraftId = null
+        state.lastSavedAt = null
         state.message = 'Formulário enviado com sucesso.'
       } else {
         state.activeDraftId = response.data.draft.id
-        state.message = 'Rascunho salvo com sucesso.'
+        state.lastSavedAt = new Date().toISOString()
+        if (!isAutosave) state.message = 'Rascunho salvo com sucesso.'
       }
       await loadDrafts()
       return true
-    } catch (error) { fail(error); return false }
-    finally { state.saving = false; state.submitting = false }
+    } catch (error) {
+      fail(error)
+      return false
+    } finally {
+      state.saving = false
+      state.autosaving = false
+      state.submitting = false
+    }
   }
 
-  return { state, values, busy, dirty, canWrite, initialize, switchContext, loadDrafts, save }
+  async function autosave() {
+    if (!canWrite.value || !dirty.value) return false
+    const payload = submissionValues(visibleFields.value, pruneHiddenValues(state.fields, values))
+    if (!state.activeDraftId && Object.keys(payload).length === 0) return false
+    return save(false, { autosave: true })
+  }
+
+  return { state, values, busy, dirty, canWrite, progress, visibleFields, initialize, switchContext, loadDrafts, save, autosave }
 }

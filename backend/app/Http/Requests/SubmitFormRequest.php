@@ -20,7 +20,7 @@ class SubmitFormRequest extends ApiRequest
 
     public function rules(): array
     {
-        return ['version_id' => ['nullable', 'integer', 'min:1', 'max:2147483647'], 'values' => ['sometimes', 'array', 'max:'.config('limits.fields_per_version')], ...app(SubmissionService::class)->buildRules($this->context['version'], $this->isDraft())];
+        return ['version_id' => ['nullable', 'integer', 'min:1', 'max:2147483647'], 'values' => ['sometimes', 'array', 'max:'.config('limits.fields_per_version')], ...app(SubmissionService::class)->buildRules($this->context['version'], $this->isDraft(), (array) $this->input('values', []))];
     }
 
     public function submissionContext(): array

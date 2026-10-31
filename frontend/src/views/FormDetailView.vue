@@ -2,12 +2,17 @@
 import { onMounted, reactive, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getForm, listFormVersions, publishFormVersion, createFormVersion, updateFormStatus, listSubmissions } from '../api'
-
 import { formatDate } from '../utils/display.js'
 import { canManageForms } from '../auth/session.js'
+import { usePageBreadcrumbs } from '../composables/useBreadcrumbs.js'
+import { pushToast } from '../composables/useToast.js'
+import StatusBadge from '../components/StatusBadge.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import AppIcon from '../components/AppIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
+const { setBreadcrumbs } = usePageBreadcrumbs()
 
 const state = reactive({
   loading: false,
@@ -21,9 +26,51 @@ const state = reactive({
   submissions: [],
   loadingSubmissions: false,
   submissionsError: '',
+  confirmAction: '',
 })
 
 const formId = computed(() => route.params.formId)
+const busy = computed(() => state.publishing || state.creatingVersion || state.togglingStatus)
+const draftVersion = computed(() => state.versions.find((v) => !v.is_published) || null)
+const canPublish = computed(() => !!draftVersion.value?.fields?.length)
+const hasDraft = computed(() => state.versions.some((v) => !v.is_published))
+const hasPublished = computed(() => state.versions.some((v) => v.is_published))
+const canCreateNewVersion = computed(() => hasPublished.value && !hasDraft.value)
+const isActive = computed(() => state.form?.is_active === true)
+
+const orderedVersions = computed(() => (
+  [...state.versions].sort((a, b) => b.version_number - a.version_number)
+))
+
+const confirmConfig = computed(() => {
+  if (state.confirmAction === 'publish') {
+    return {
+      title: `Publicar versão ${draftVersion.value?.version_number ?? ''}?`,
+      description: `Esta versão possui ${draftVersion.value?.fields?.length ?? 0} campo(s). Após a publicação, a estrutura desta versão torna-se imutável e passará a receber novos preenchimentos.`,
+      confirmLabel: state.publishing ? 'Publicando…' : 'Publicar versão',
+      tone: 'primary',
+    }
+  }
+  if (state.confirmAction === 'new-version') {
+    return {
+      title: 'Criar nova versão em edição?',
+      description: 'Uma nova versão em rascunho será criada copiando os campos e a ordem da última publicação. As versões publicadas e os envios anteriores permanecem intactos.',
+      confirmLabel: state.creatingVersion ? 'Criando…' : 'Criar nova versão',
+      tone: 'primary',
+    }
+  }
+  if (state.confirmAction === 'toggle-status') {
+    return {
+      title: isActive.value ? 'Desativar este formulário?' : 'Ativar este formulário?',
+      description: isActive.value
+        ? 'Formulários inativos impedem novos preenchimentos e edições de rascunhos, preservando integralmente todos os envios já registrados.'
+        : 'O formulário voltará a ficar disponível para preenchimento na versão publicada.',
+      confirmLabel: state.togglingStatus ? 'Atualizando…' : (isActive.value ? 'Desativar formulário' : 'Ativar formulário'),
+      tone: isActive.value ? 'danger' : 'primary',
+    }
+  }
+  return { title: '', description: '', confirmLabel: 'Confirmar', tone: 'primary' }
+})
 
 async function loadForm() {
   state.loading = true
@@ -32,6 +79,12 @@ async function loadForm() {
   try {
     const data = await getForm(formId.value)
     state.form = data?.data?.form ?? null
+    if (state.form) {
+      setBreadcrumbs([
+        { label: 'Formulários', to: '/' },
+        { label: state.form.name },
+      ])
+    }
 
     const versionsData = await listFormVersions(formId.value)
     state.versions = versionsData?.data?.versions ?? []
@@ -58,21 +111,17 @@ async function loadSubmissions() {
   }
 }
 
-const busy = computed(() => state.publishing || state.creatingVersion || state.togglingStatus)
-const canPublish = computed(() => !!draftVersion.value?.fields?.length)
+async function executeConfirmedAction() {
+  const action = state.confirmAction
+  if (!action) return
+  if (action === 'publish') await executePublish()
+  else if (action === 'new-version') await executeCreateNewVersion()
+  else if (action === 'toggle-status') await executeToggleActive()
+  state.confirmAction = ''
+}
 
-const draftVersion = computed(() => state.versions.find((v) => !v.is_published) || null)
-
-const hasDraft = computed(() => state.versions.some((v) => !v.is_published))
-const hasPublished = computed(() => state.versions.some((v) => v.is_published))
-const canCreateNewVersion = computed(() => hasPublished.value && !hasDraft.value)
-
-const isActive = computed(() => state.form?.is_active === true)
-
-async function handlePublish() {
-  if (!window.confirm(`Publicar a versão ${draftVersion.value?.version_number} com ${draftVersion.value?.fields?.length ?? 0} campo(s)? Após publicar, seus campos não poderão ser alterados.`)) return
+async function executePublish() {
   if (busy.value || !canManageForms.value || !canPublish.value) return
-
   const draft = state.versions.find((v) => !v.is_published)
   if (!draft) return
 
@@ -83,6 +132,7 @@ async function handlePublish() {
   try {
     const data = await publishFormVersion(formId.value, draft.id)
     state.publishMessage = data?.message || 'Versão publicada com sucesso.'
+    pushToast(state.publishMessage)
     await loadForm()
   } catch (error) {
     if (error.status === 422) {
@@ -97,8 +147,7 @@ async function handlePublish() {
   }
 }
 
-async function handleCreateNewVersion() {
-  if (!window.confirm('Criar uma nova versão em edição com uma cópia dos campos da última publicação? As versões e os envios anteriores serão preservados.')) return
+async function executeCreateNewVersion() {
   if (busy.value || !canManageForms.value || !canCreateNewVersion.value) return
 
   state.creatingVersion = true
@@ -108,8 +157,12 @@ async function handleCreateNewVersion() {
   try {
     const data = await createFormVersion(formId.value)
     state.publishMessage = data?.message || 'Nova versão criada com sucesso.'
-    if (data?.data?.version?.id) await router.push({ path: `/forms/${formId.value}/versions/${data.data.version.id}/fields`, query: { returnTo: route.fullPath } })
-    else await loadForm()
+    pushToast(state.publishMessage)
+    if (data?.data?.version?.id) {
+      await router.push({ path: `/forms/${formId.value}/versions/${data.data.version.id}/fields`, query: { returnTo: route.fullPath } })
+    } else {
+      await loadForm()
+    }
   } catch (error) {
     state.error = error?.body?.message || 'Erro ao criar nova versão.'
   } finally {
@@ -117,8 +170,7 @@ async function handleCreateNewVersion() {
   }
 }
 
-async function handleToggleActive() {
-  if (!window.confirm(`${isActive.value ? 'Desativar' : 'Ativar'} este formulário? A desativação impede preenchimentos e preserva os envios existentes.`)) return
+async function executeToggleActive() {
   if (busy.value || !canManageForms.value || !state.form) return
 
   state.togglingStatus = true
@@ -129,6 +181,7 @@ async function handleToggleActive() {
     const data = await updateFormStatus(formId.value, !isActive.value)
     state.form = data?.data ?? state.form
     state.publishMessage = data?.message || 'Status do formulário atualizado.'
+    pushToast(state.publishMessage)
   } catch (error) {
     state.error = error?.body?.message || 'Erro ao alterar status do formulário.'
   } finally {
@@ -141,147 +194,238 @@ onMounted(() => {
     router.replace('/')
     return
   }
-
   loadForm()
 })
 </script>
 
 <template>
-  <section class="panel panel-forms">
+  <div class="page-stack" :aria-busy="state.loading">
     <template v-if="state.loading">
-      <p class="panel-subtitle">Carregando formulário…</p>
+      <span class="sr-only" role="status">Carregando formulário…</span>
+      <div class="surface-card skeleton-list" aria-hidden="true">
+        <div class="skeleton-block w-50" style="height: 1.75rem;" />
+        <div class="skeleton-block w-80" />
+        <div class="skeleton-row">
+          <div class="skeleton-lines">
+            <div class="skeleton-block w-35" />
+            <div class="skeleton-block w-65" />
+          </div>
+          <div class="skeleton-block btn" />
+        </div>
+      </div>
     </template>
 
-    <template v-else-if="state.error">
+    <section v-else-if="state.error && !state.form" class="surface-card">
       <p class="feedback error" role="alert">{{ state.error }}</p>
       <button class="ghost-button" type="button" @click="loadForm">Tentar novamente</button>
-    </template>
+    </section>
 
     <template v-else-if="state.form">
-      <div class="panel-header">
-        <div>
-          <h1>{{ state.form.name }}</h1>
-          <p class="panel-subtitle">
-            {{ state.form.description || 'Sem descrição.' }} ·
-            {{ isActive ? 'ativo' : 'inativo' }}
-          </p>
+      <!-- Hero Card do Formulário -->
+      <section class="panel">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <div>
+            <div class="card-heading" style="margin-bottom: 0.4rem;">
+              <h1>{{ state.form.name }}</h1>
+              <StatusBadge
+                :tone="isActive ? 'success' : 'muted'"
+                :label="isActive ? 'Ativo' : 'Inativo'"
+              />
+            </div>
+            <p class="panel-subtitle">{{ state.form.description || 'Sem descrição cadastrada.' }}</p>
+          </div>
+
+          <div class="panel-actions">
+            <RouterLink
+              v-if="isActive && hasPublished"
+              class="primary-button"
+              :to="{ path: `/forms/${formId}/fill`, query: { returnTo: route.fullPath } }"
+            >
+              <span>Preencher formulário</span>
+              <AppIcon name="arrow-right" :size="15" />
+            </RouterLink>
+
+            <RouterLink
+              v-if="canManageForms && draftVersion"
+              class="ghost-button"
+              :to="{ path: `/forms/${formId}/versions/${draftVersion.id}/fields`, query: { returnTo: route.fullPath } }"
+            >
+              Editar campos (v{{ draftVersion.version_number }})
+            </RouterLink>
+
+            <button
+              v-if="canManageForms && canCreateNewVersion"
+              class="ghost-button"
+              type="button"
+              :disabled="busy"
+              @click="state.confirmAction = 'new-version'"
+            >
+              <AppIcon name="plus" :size="15" />
+              <span>{{ state.creatingVersion ? 'Criando…' : 'Nova versão' }}</span>
+            </button>
+
+            <button
+              v-if="canManageForms && draftVersion"
+              class="primary-button"
+              type="button"
+              :disabled="!canPublish || busy"
+              @click="state.confirmAction = 'publish'"
+            >
+              <AppIcon name="check" :size="15" />
+              <span>{{ state.publishing ? 'Publicando…' : `Publicar v${draftVersion.version_number}` }}</span>
+            </button>
+
+            <button
+              v-if="canManageForms"
+              class="ghost-button"
+              :class="{ 'ghost-danger': isActive }"
+              type="button"
+              :disabled="busy"
+              @click="state.confirmAction = 'toggle-status'"
+            >
+              {{ state.togglingStatus ? 'Atualizando…' : (isActive ? 'Desativar' : 'Ativar') }}
+            </button>
+          </div>
         </div>
 
-        <div class="panel-actions">
-          <RouterLink
-            v-if="isActive && hasPublished"
-            class="ghost-button"
-            :to="{ path: `/forms/${formId}/fill`, query: { returnTo: route.fullPath } }"
-          >
-            Preencher formulário
-          </RouterLink>
+        <p v-if="state.error" class="feedback error" role="alert">{{ state.error }}</p>
 
-          <RouterLink
-            v-if="canManageForms && draftVersion"
-            class="ghost-button"
-            :to="{ path: `/forms/${formId}/versions/${draftVersion.id}/fields`, query: { returnTo: route.fullPath } }"
-          >
-            Gerenciar campos da versão em edição
-          </RouterLink>
-
-          <button
-            v-if="canManageForms && canCreateNewVersion"
-            class="ghost-button"
-            type="button"
-            :disabled="busy"
-            @click="handleCreateNewVersion"
-          >
-            <span v-if="!state.creatingVersion">Criar nova versão</span>
-            <span v-else>Criando…</span>
-          </button>
-
-          <button
-            class="ghost-button"
-            type="button"
-            v-if="canManageForms"
-            :disabled="!canPublish || busy"
-            @click="handlePublish"
-          >
-            <span v-if="!state.publishing">Publicar versão em edição</span>
-            <span v-else>Publicando…</span>
-          </button>
-
-          <button
-            class="ghost-button"
-            type="button"
-            v-if="canManageForms"
-            :disabled="busy"
-            @click="handleToggleActive"
-          >
-            <span v-if="!state.togglingStatus">
-              {{ isActive ? 'Desativar formulário' : 'Ativar formulário' }}
-            </span>
-            <span v-else>Atualizando…</span>
-          </button>
+        <div v-if="state.form.latest_version" class="form-meta">
+          <StatusBadge
+            :tone="state.form.latest_version.is_published ? 'success' : 'warning'"
+            :label="state.form.latest_version.is_published ? `Versão ${state.form.latest_version.version_number} vigente` : `Versão ${state.form.latest_version.version_number} em edição`"
+          />
+          <span v-if="state.form.latest_version.fields_count !== undefined" class="tabular">
+            {{ state.form.latest_version.fields_count }} campo(s) configurado(s)
+          </span>
         </div>
-      </div>
-
-      <div class="form-meta" v-if="state.form.latest_version">
-        <span>Versão publicada {{ state.form.latest_version.version_number }}</span>
-        <span v-if="state.form.latest_version.fields_count !== undefined">
-          {{ state.form.latest_version.fields_count }} campo(s)
-        </span>
-      </div>
-
-      <p v-if="state.publishMessage" class="panel-subtitle">{{ state.publishMessage }}</p>
-
-      <section v-if="canManageForms" class="form-card" style="margin-top: 1.5rem;">
-        <h2>Versões do formulário</h2>
-        <p v-if="draftVersion && !draftVersion.fields?.length" class="panel-subtitle">Adicione ao menos um campo à versão em edição antes de publicar.</p>
-        <ul class="fields-list">
-          <li v-for="version in state.versions" :key="version.id" class="field-row">
-            <div class="field-row-main"><strong>Versão {{ version.version_number }} · {{ version.is_published ? 'Publicada' : 'Em edição' }}</strong><span class="field-row-meta">{{ version.fields?.length ?? 0 }} campo(s) <template v-if="version.published_at">· Publicada em {{ formatDate(version.published_at) }}</template></span></div>
-            <RouterLink class="ghost-button" :to="{ path: `/forms/${formId}/versions/${version.id}/fields`, query: { returnTo: route.fullPath } }">{{ version.is_published ? 'Consultar campos' : 'Gerenciar campos' }}</RouterLink>
-          </li>
-        </ul>
       </section>
 
-      <div class="form-card" style="margin-top: 1.5rem;">
-        <div class="panel-header">
-          <div>
-            <h3>Submissões deste formulário</h3>
-            <p class="panel-subtitle">
-              Listagem resumida das submissões vinculadas a este formulário.
-            </p>
+      <!-- Grade Assimétrica: Submissões Recentes + Timeline de Versões -->
+      <div :class="canManageForms ? 'detail-grid' : 'page-stack'">
+        <section class="table-card" aria-labelledby="recent-submissions-heading">
+          <div class="panel-header" style="padding: 1.25rem 1.25rem 0;">
+            <div>
+              <h2 id="recent-submissions-heading">Submissões recentes</h2>
+              <p class="panel-subtitle">Últimos envios registrados para este formulário.</p>
+            </div>
+            <RouterLink class="ghost-button" :to="`/submissions?form_id=${formId}`">
+              Ver todas
+            </RouterLink>
           </div>
-        </div>
 
-        <p v-if="state.loadingSubmissions" class="panel-subtitle">Carregando submissões…</p>
-        <p v-else-if="state.submissionsError" class="feedback error" role="alert">{{ state.submissionsError }}</p>
-
-        <div v-else>
-          <div v-if="!state.submissions.length" class="empty-state">
-            <p>Nenhuma submissão encontrada para este formulário.</p>
-          </div>
-          <ul v-else class="fields-list">
-            <li v-for="s in state.submissions" :key="s.id" class="field-row">
-              <div class="field-row-main">
-                <strong>#{{ s.id }}</strong>
-                <span class="field-row-meta">
-                  versão {{ s.version.version_number }} · {{ s.submitted_at }} ·
-                  {{ s.fields_count }} campo(s)
-                </span>
+          <div v-if="state.loadingSubmissions" class="skeleton-list" aria-hidden="true" style="padding: 1rem;">
+            <div v-for="n in 2" :key="n" class="skeleton-row">
+              <div class="skeleton-lines">
+                <div class="skeleton-block w-35" />
+                <div class="skeleton-block w-65" />
               </div>
-              <button
+              <div class="skeleton-block btn" />
+            </div>
+          </div>
+          <div v-else-if="state.submissionsError" style="padding: 1rem;">
+            <p class="feedback error" role="alert">{{ state.submissionsError }}</p>
+          </div>
+          <div v-else-if="!state.submissions.length" style="padding: 1.25rem;">
+            <div class="empty-state">
+              <span class="empty-state-icon" aria-hidden="true"><AppIcon name="inbox" :size="20" /></span>
+              <p>Nenhuma submissão enviada para este formulário até o momento.</p>
+            </div>
+          </div>
+          <div v-else class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">Protocolo</th>
+                  <th scope="col">Versão</th>
+                  <th scope="col">Data</th>
+                  <th scope="col" class="col-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="s in state.submissions" :key="s.id">
+                  <td data-label="Protocolo">
+                    <span class="mono-badge">#{{ s.id }}</span>
+                  </td>
+                  <td data-label="Versão" class="tabular">
+                    v{{ s.version.version_number }} ({{ s.fields_count }} campos)
+                  </td>
+                  <td data-label="Data" class="tabular">
+                    {{ formatDate(s.submitted_at) }}
+                  </td>
+                  <td data-label="Ação" class="col-right">
+                    <RouterLink
+                      class="ghost-button"
+                      :to="{ path: `/submissions/${s.id}`, query: { returnTo: route.fullPath } }"
+                    >
+                      Prontuário
+                    </RouterLink>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Coluna Lateral: Timeline Vertical de Versões -->
+        <section v-if="canManageForms" class="surface-card" aria-labelledby="versions-heading">
+          <div class="card-heading">
+            <h2 id="versions-heading">Linha do tempo de versões</h2>
+            <AppIcon name="layers" :size="18" />
+          </div>
+          <p class="panel-subtitle">Evolução estrutural e imutabilidade das versões.</p>
+
+          <p v-if="draftVersion && !draftVersion.fields?.length" class="feedback warning" role="status" style="margin-top: 0.85rem;">
+            Adicione ao menos um campo à versão em rascunho antes de publicá-la.
+          </p>
+
+          <ol class="version-timeline">
+            <li
+              v-for="version in orderedVersions"
+              :key="version.id"
+              class="timeline-item"
+              :class="version.is_published ? 'is-published' : 'is-draft'"
+            >
+              <span class="timeline-dot" aria-hidden="true" />
+              <div class="cell-stack" style="flex: 1;">
+                <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+                  <strong>Versão {{ version.version_number }}</strong>
+                  <StatusBadge
+                    :tone="version.is_published ? 'success' : 'warning'"
+                    :label="version.is_published ? 'Publicada' : 'Em edição'"
+                  />
+                </div>
+                <small class="tabular">
+                  {{ version.fields?.length ?? 0 }} campo(s)
+                  <template v-if="version.published_at"> · {{ formatDate(version.published_at) }}</template>
+                </small>
+              </div>
+              <RouterLink
                 class="ghost-button"
-                type="button"
-                @click="router.push({ path: `/submissions/${s.id}`, query: { returnTo: route.fullPath } })"
+                :to="{ path: `/forms/${formId}/versions/${version.id}/fields`, query: { returnTo: route.fullPath } }"
               >
-                Ver detalhes
-              </button>
+                {{ version.is_published ? 'Campos' : 'Editar' }}
+              </RouterLink>
             </li>
-          </ul>
-        </div>
+          </ol>
+        </section>
       </div>
+
+      <ConfirmDialog
+        :open="!!state.confirmAction"
+        dialog-id="form-detail-confirm"
+        :title="confirmConfig.title"
+        :description="confirmConfig.description"
+        :confirm-label="confirmConfig.confirmLabel"
+        :tone="confirmConfig.tone"
+        :busy="busy"
+        @confirm="executeConfirmedAction"
+        @cancel="state.confirmAction = ''"
+      />
     </template>
 
-    <template v-else>
+    <section v-else class="surface-card">
       <p class="panel-subtitle">Formulário não encontrado.</p>
-    </template>
-  </section>
+    </section>
+  </div>
 </template>
