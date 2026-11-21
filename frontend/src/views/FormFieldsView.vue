@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getForm, listFormVersions, listFields, createField, updateField, deleteField } from '../api'
 import { canManageForms } from '../auth/session.js'
@@ -15,6 +15,12 @@ import {
   getFormLayoutMode,
   groupFieldsBySection,
 } from '../utils/formLayout.js'
+import {
+  applyFieldOrders,
+  fieldFromResponse,
+  removeFieldById,
+  upsertField,
+} from '../utils/fieldCollection.js'
 import { errorMessage } from '../composables/useListing.js'
 import { usePageBreadcrumbs } from '../composables/useBreadcrumbs.js'
 import { pushToast } from '../composables/useToast.js'
@@ -36,9 +42,41 @@ const state = reactive({
   version: null,
   fields: [],
   saving: false,
+  deleting: false,
   editingId: null,
   deletingField: null,
 })
+
+// Escritas em andamento: o editor nunca é bloqueado nem recarregado;
+// só os itens afetados ficam momentaneamente indisponíveis.
+const busyIds = reactive(new Set())
+const pendingOps = ref(0)
+const lastSavedAt = ref(null)
+const syncFailed = ref(false)
+
+const syncStatus = computed(() => {
+  if (pendingOps.value > 0) return { tone: 'saving', text: 'Salvando…' }
+  if (syncFailed.value) return { tone: 'error', text: 'Falha ao salvar a última alteração' }
+  if (lastSavedAt.value) return { tone: 'saved', text: 'Todas as alterações salvas' }
+  return { tone: 'idle', text: '' }
+})
+
+async function trackWrite(fn, busyKeys = []) {
+  pendingOps.value += 1
+  syncFailed.value = false
+  busyKeys.forEach(key => busyIds.add(key))
+  try {
+    const result = await fn()
+    lastSavedAt.value = Date.now()
+    return result
+  } catch (error) {
+    syncFailed.value = true
+    throw error
+  } finally {
+    busyKeys.forEach(key => busyIds.delete(key))
+    pendingOps.value -= 1
+  }
+}
 
 const viewMode = ref('split')
 const previewValues = reactive({})
@@ -202,11 +240,13 @@ async function loadData() {
   state.loaded = false
   state.error = ''
   try {
-    const form = await getForm(formId)
-    const versions = await listFormVersions(formId)
+    const [form, versions, fields] = await Promise.all([
+      getForm(formId),
+      listFormVersions(formId),
+      listFields(formId, versionId),
+    ])
     const version = versions?.data?.versions?.find(item => String(item.id) === String(versionId))
     if (!version) throw new Error('Versão não encontrada neste formulário.')
-    const fields = await listFields(formId, versionId)
     state.form = form.data.form
     state.version = version
     state.fields = sortedFields(fields?.data?.fields ?? [])
@@ -222,6 +262,29 @@ async function loadData() {
   } finally {
     state.loading = false
   }
+}
+
+/** Recarrega somente os campos, em silêncio (sem esqueleto e sem desmontar o editor). */
+async function refreshFields() {
+  try {
+    const fields = await listFields(formId, versionId)
+    state.fields = sortedFields(fields?.data?.fields ?? [])
+    syncPreviewDefaults(state.fields)
+  } catch (error) {
+    state.error = error.body ? errorMessage(error) : error.message
+  }
+}
+
+function applyServerField(response) {
+  const saved = fieldFromResponse(response)
+  if (!saved) return false
+  state.fields = upsertField(state.fields, saved)
+  syncPreviewDefaults(state.fields)
+  return true
+}
+
+function focusLabelInput() {
+  nextTick(() => document.getElementById('builder-field-label')?.focus({ preventScroll: true }))
 }
 
 function cancelEdit() {
@@ -244,7 +307,7 @@ function cancelEdit() {
 }
 
 function startEditField(field) {
-  if (!editable.value || state.saving) return
+  if (!editable.value) return
   state.editingId = field.id
   const cond = getFieldCondition(field)
   const choices = getFieldChoices(field)
@@ -305,24 +368,33 @@ function fieldToApiPayload(field, nextOrder) {
 }
 
 async function moveField(index, direction) {
-  if (!editable.value || state.saving) return
+  if (!editable.value) return
   const pair = reorderFieldPair(state.fields, index, direction)
   if (!pair) return
+  const { current, target, currentNextOrder, targetNextOrder } = pair
+  if (busyIds.has(current.id) || busyIds.has(target.id)) return
 
-  state.saving = true
+  // Atualização otimista: a lista já muda na tela; a API confirma em segundo plano.
+  const snapshot = state.fields
+  state.fields = applyFieldOrders(state.fields, {
+    [current.id]: currentNextOrder,
+    [target.id]: targetNextOrder,
+  })
   state.error = ''
-  state.message = ''
+
   try {
-    await updateField(formId, versionId, pair.current.id, fieldToApiPayload(pair.current, pair.currentNextOrder))
-    await updateField(formId, versionId, pair.target.id, fieldToApiPayload(pair.target, pair.targetNextOrder))
-    await loadData()
+    const [first, second] = await trackWrite(() => Promise.all([
+      updateField(formId, versionId, current.id, fieldToApiPayload(current, currentNextOrder)),
+      updateField(formId, versionId, target.id, fieldToApiPayload(target, targetNextOrder)),
+    ]), [current.id, target.id])
+    applyServerField(first)
+    applyServerField(second)
     if (!isEditing.value) newField.order = nextFieldOrder(state.fields)
-    state.message = `Campo “${pair.current.label}” movido para a ordem ${pair.currentNextOrder}.`
-    pushToast(state.message)
+    pushToast(`Campo “${current.label}” movido para a posição ${currentNextOrder}.`)
   } catch (error) {
+    state.fields = snapshot
     state.error = error.body ? errorMessage(error) : error.message
-  } finally {
-    state.saving = false
+    await refreshFields()
   }
 }
 
@@ -346,11 +418,15 @@ async function handleCreateField() {
       layout_mode: versionLayoutMode.value,
     })
 
-    if (isEditing.value) await updateField(formId, versionId, state.editingId, payload)
-    else await createField(formId, versionId, payload)
+    const wasEditing = isEditing.value
+    const editingId = state.editingId
+    const response = await trackWrite(() => (wasEditing
+      ? updateField(formId, versionId, editingId, payload)
+      : createField(formId, versionId, payload)))
 
-    await loadData()
+    if (!applyServerField(response)) await refreshFields()
     cancelEdit()
+    focusLabelInput()
     state.message = 'Campo salvo com sucesso.'
     pushToast(state.message)
   } catch (error) {
@@ -361,8 +437,7 @@ async function handleCreateField() {
 }
 
 async function handleDuplicateField(field) {
-  if (!editable.value || state.saving) return
-  state.saving = true
+  if (!editable.value || busyIds.has(field.id)) return
   state.error = ''
   state.message = ''
   try {
@@ -386,34 +461,36 @@ async function handleDuplicateField(field) {
     if (cond && cond.field) {
       payload.condition = cond
     }
-    await createField(formId, versionId, payload)
-    await loadData()
-    if (!isEditing.value) cancelEdit()
+    const response = await trackWrite(() => createField(formId, versionId, payload), [field.id])
+    if (!applyServerField(response)) await refreshFields()
+    if (!isEditing.value) newField.order = nextFieldOrder(state.fields)
     state.message = `Campo duplicado com sucesso como “${draft.label}”.`
     pushToast(state.message)
   } catch (error) {
     state.error = error.body ? errorMessage(error) : error.message
-  } finally {
-    state.saving = false
   }
 }
 
 async function setVersionLayoutMode(mode) {
-  if (!editable.value || state.saving || versionLayoutMode.value === mode) return
+  if (!editable.value || versionLayoutMode.value === mode) return
+  const previousMode = versionLayoutMode.value
   versionLayoutMode.value = mode
+  previewStepIndex.value = 0
   if (state.fields.length > 0) {
     const firstField = state.fields[0]
-    state.saving = true
+    if (busyIds.has(firstField.id)) {
+      versionLayoutMode.value = previousMode
+      return
+    }
     try {
       const payload = fieldToApiPayload(firstField, firstField.order)
       payload.layout_mode = mode
-      await updateField(formId, versionId, firstField.id, payload)
-      await loadData()
+      const response = await trackWrite(() => updateField(formId, versionId, firstField.id, payload), [firstField.id])
+      if (!applyServerField(response)) await refreshFields()
       pushToast(`Modo alterado para ${mode === 'wizard' ? 'Etapas (Wizard)' : 'Cards Contínuos'}.`)
     } catch (err) {
+      versionLayoutMode.value = previousMode
       state.error = err.body ? errorMessage(err) : err.message
-    } finally {
-      state.saving = false
     }
   }
 }
@@ -450,8 +527,8 @@ function applyPresetToEditor(preset) {
 }
 
 async function insertPresetDirectly(preset) {
-  if (!editable.value || state.saving) return
-  state.saving = true
+  const busyKey = `preset:${preset.id}`
+  if (!editable.value || busyIds.has(busyKey)) return
   state.error = ''
   state.message = ''
   try {
@@ -471,60 +548,82 @@ async function insertPresetDirectly(preset) {
     if (choices.length) {
       payload.options = choices
     }
-    await createField(formId, versionId, payload)
-    await loadData()
-    if (!isEditing.value) cancelEdit()
+    const response = await trackWrite(() => createField(formId, versionId, payload), [busyKey])
+    if (!applyServerField(response)) await refreshFields()
+    if (!isEditing.value) newField.order = nextFieldOrder(state.fields)
     closePresetsDrawer()
     state.message = `Campo “${preset.label}” adicionado à versão.`
     pushToast(state.message)
   } catch (error) {
     state.error = error.body ? errorMessage(error) : error.message
-  } finally {
-    state.saving = false
   }
 }
 
 async function insertBlockDirectly(block) {
-  if (!editable.value || state.saving || insertingBlock.value) return
+  if (!editable.value || insertingBlock.value) return
   insertingBlock.value = true
-  state.saving = true
   state.error = ''
   state.message = ''
   try {
-    let currentOrder = nextFieldOrder(state.fields)
-    const existing = [...state.fields]
+    await trackWrite(async () => {
+      let currentOrder = nextFieldOrder(state.fields)
+      const existing = [...state.fields]
 
-    for (const fieldTemplate of block.fields) {
-      const uniqueName = generateUniqueFieldName(fieldTemplate.name, existing)
-      const choices = Array.isArray(fieldTemplate.options) ? fieldTemplate.options : []
-      const payload = {
-        label: fieldTemplate.label,
-        name: uniqueName,
-        type: fieldTemplate.type,
-        is_required: fieldTemplate.is_required,
-        order: currentOrder++,
-        section: fieldTemplate.section || block.name,
-        section_description: fieldTemplate.section_description || null,
-        width: fieldTemplate.width || 'full',
-        layout_mode: versionLayoutMode.value,
+      for (const fieldTemplate of block.fields) {
+        const uniqueName = generateUniqueFieldName(fieldTemplate.name, existing)
+        const choices = Array.isArray(fieldTemplate.options) ? fieldTemplate.options : []
+        const payload = {
+          label: fieldTemplate.label,
+          name: uniqueName,
+          type: fieldTemplate.type,
+          is_required: fieldTemplate.is_required,
+          order: currentOrder++,
+          section: fieldTemplate.section || block.name,
+          section_description: fieldTemplate.section_description || null,
+          width: fieldTemplate.width || 'full',
+          layout_mode: versionLayoutMode.value,
+        }
+        if (choices.length) {
+          payload.options = choices
+        }
+        const created = await createField(formId, versionId, payload)
+        // Cada campo aparece na tela assim que é criado.
+        if (!applyServerField(created)) await refreshFields()
+        existing.push(fieldFromResponse(created) ?? { name: uniqueName, order: payload.order })
       }
-      if (choices.length) {
-        payload.options = choices
-      }
-      const created = await createField(formId, versionId, payload)
-      existing.push(created?.data?.field ?? { name: uniqueName, order: payload.order })
-    }
+    })
 
-    await loadData()
-    if (!isEditing.value) cancelEdit()
+    if (!isEditing.value) newField.order = nextFieldOrder(state.fields)
     closePresetsDrawer()
     state.message = `Bloco “${block.name}” (${block.fields.length} campos) adicionado com sucesso.`
     pushToast(state.message)
   } catch (error) {
     state.error = error.body ? errorMessage(error) : error.message
   } finally {
-    state.saving = false
     insertingBlock.value = false
+  }
+}
+
+async function confirmDeleteField() {
+  const field = state.deletingField
+  if (!field || !editable.value || state.deleting) return
+  state.deleting = true
+  state.error = ''
+  state.message = ''
+  try {
+    await trackWrite(() => deleteField(formId, versionId, field.id), [field.id])
+    state.fields = removeFieldById(state.fields, field.id)
+    if (state.editingId === field.id) cancelEdit()
+    else if (!isEditing.value) newField.order = nextFieldOrder(state.fields)
+    state.deletingField = null
+    state.message = `Campo “${field.label}” removido.`
+    pushToast(state.message)
+  } catch (error) {
+    state.error = error.body ? errorMessage(error) : error.message
+    state.deletingField = null
+    await refreshFields()
+  } finally {
+    state.deleting = false
   }
 }
 
@@ -564,6 +663,9 @@ onMounted(async () => {
           <p class="panel-subtitle">
             {{ state.fields.length }} campo(s) configurado(s) em {{ groupedBuilderSections.length }} grupo(s) lógico(s)
           </p>
+          <p class="builder-sync-status" :class="`is-${syncStatus.tone}`" role="status" aria-live="polite">
+            {{ syncStatus.text }}
+          </p>
         </div>
 
         <div class="builder-toolbar">
@@ -591,7 +693,6 @@ onMounted(async () => {
             v-if="editable"
             class="secondary-button"
             type="button"
-            :disabled="state.saving"
             @click="openPresetsDrawer"
           >
             <span aria-hidden="true">⚡</span>
@@ -692,7 +793,7 @@ onMounted(async () => {
                     <button
                       class="ghost-button icon-button"
                       type="button"
-                      :disabled="state.saving || state.fields.findIndex(f => f.id === field.id) === 0"
+                      :disabled="busyIds.has(field.id) || state.fields.findIndex(f => f.id === field.id) === 0"
                       :aria-label="`Mover campo ${field.label} para cima`"
                       title="Mover para cima"
                       @click="moveField(state.fields.findIndex(f => f.id === field.id), -1)"
@@ -702,7 +803,7 @@ onMounted(async () => {
                     <button
                       class="ghost-button icon-button"
                       type="button"
-                      :disabled="state.saving || state.fields.findIndex(f => f.id === field.id) === state.fields.length - 1"
+                      :disabled="busyIds.has(field.id) || state.fields.findIndex(f => f.id === field.id) === state.fields.length - 1"
                       :aria-label="`Mover campo ${field.label} para baixo`"
                       title="Mover para baixo"
                       @click="moveField(state.fields.findIndex(f => f.id === field.id), 1)"
@@ -712,7 +813,7 @@ onMounted(async () => {
                     <button
                       class="ghost-button"
                       type="button"
-                      :disabled="state.saving"
+                      :disabled="busyIds.has(field.id)"
                       :aria-label="`Duplicar campo ${field.label}`"
                       title="Duplicar este campo"
                       @click="handleDuplicateField(field)"
@@ -722,7 +823,7 @@ onMounted(async () => {
                     <button
                       class="ghost-button"
                       type="button"
-                      :disabled="state.saving"
+                      :disabled="busyIds.has(field.id)"
                       :aria-label="`Editar campo ${field.label}`"
                       @click="startEditField(field)"
                     >
@@ -731,7 +832,7 @@ onMounted(async () => {
                     <button
                       class="ghost-button ghost-danger"
                       type="button"
-                      :disabled="state.saving"
+                      :disabled="busyIds.has(field.id)"
                       :aria-label="`Remover campo ${field.label}`"
                       @click="state.deletingField = field"
                     >
@@ -752,7 +853,7 @@ onMounted(async () => {
           </p>
 
           <form class="form" @submit.prevent="handleCreateField">
-            <fieldset class="response-fields form" :disabled="state.saving">
+            <fieldset class="response-fields form">
               <div class="field">
                 <label for="builder-field-label">
                   <span>Rótulo visível</span>
@@ -960,7 +1061,7 @@ onMounted(async () => {
                 <button class="primary-button" type="submit" :disabled="state.saving">
                   {{ state.saving ? 'Salvando…' : (isEditing ? 'Salvar alterações' : 'Adicionar campo') }}
                 </button>
-                <button v-if="isEditing" class="ghost-button" type="button" :disabled="state.saving" @click="cancelEdit">
+                <button v-if="isEditing" class="ghost-button" type="button" @click="cancelEdit">
                   Cancelar edição
                 </button>
               </div>
@@ -1171,7 +1272,7 @@ onMounted(async () => {
                     <button
                       class="primary-button btn-sm"
                       type="button"
-                      :disabled="state.saving || insertingBlock"
+                      :disabled="insertingBlock"
                       @click="insertBlockDirectly(block)"
                     >
                       {{ insertingBlock ? 'Adicionando…' : `+ Inserir Bloco (${block.fields.length} campos)` }}
@@ -1213,7 +1314,7 @@ onMounted(async () => {
                     <button
                       class="primary-button btn-sm"
                       type="button"
-                      :disabled="state.saving"
+                      :disabled="busyIds.has('preset:' + preset.id)"
                       title="Inserir diretamente na versão"
                       @click="insertPresetDirectly(preset)"
                     >
@@ -1222,7 +1323,6 @@ onMounted(async () => {
                     <button
                       class="ghost-button btn-sm"
                       type="button"
-                      :disabled="state.saving"
                       title="Carregar no editor para ajustar antes de salvar"
                       @click="applyPresetToEditor(preset)"
                     >
@@ -1241,9 +1341,9 @@ onMounted(async () => {
         dialog-id="delete-field-confirm"
         title="Remover este campo?"
         :description="state.deletingField ? `O campo “${state.deletingField.label}” (${state.deletingField.name}) será removido da versão em edição.` : ''"
-        :confirm-label="state.saving ? 'Removendo…' : 'Remover campo'"
+        :confirm-label="state.deleting ? 'Removendo…' : 'Remover campo'"
         tone="danger"
-        :busy="state.saving"
+        :busy="state.deleting"
         @confirm="confirmDeleteField"
         @cancel="state.deletingField = null"
       />

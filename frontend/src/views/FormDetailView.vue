@@ -77,7 +77,11 @@ async function loadForm() {
   state.error = ''
 
   try {
-    const data = await getForm(formId.value)
+    const [data, versionsData] = await Promise.all([
+      getForm(formId.value),
+      listFormVersions(formId.value),
+      loadSubmissions(),
+    ])
     state.form = data?.data?.form ?? null
     if (state.form) {
       setBreadcrumbs([
@@ -85,11 +89,7 @@ async function loadForm() {
         { label: state.form.name },
       ])
     }
-
-    const versionsData = await listFormVersions(formId.value)
     state.versions = versionsData?.data?.versions ?? []
-
-    await loadSubmissions()
   } catch (error) {
     state.error = error?.body?.message || 'Erro ao carregar formulário.'
   } finally {
