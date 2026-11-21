@@ -46,15 +46,21 @@ test('reload and explicit return from detail restore filters, page and page size
 })
 
 test('query actions preserve applied criteria during pagination and reset page on new filters', async () => {
-  const { listing, router } = await setup('/submissions?form_id=4&page=3')
+  const { listing, router, requests } = await setup('/submissions?form_id=4&page=3')
   await listing.load()
+  assert.equal(requests.length, 1)
   listing.filters.user_id = '99'
   await listing.setPage(4)
   assert.equal(router.currentRoute.value.query.page, '4')
   assert.equal(router.currentRoute.value.query.user_id, undefined)
+  assert.equal(requests.length, 2)
+  assert.equal(requests[1].page, 4)
   await listing.apply()
   assert.equal(router.currentRoute.value.query.user_id, '99')
   assert.equal(router.currentRoute.value.query.page, undefined)
+  assert.equal(requests.length, 3)
+  assert.equal(requests[2].user_id, '99')
+  assert.equal(requests[2].page, 1)
 })
 
 test('clearing unsaved edits on an already default URL resets the controls too', async () => {

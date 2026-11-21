@@ -48,6 +48,27 @@ export function useFormFill(formId, userId, client = api) {
     catch { state.draftsError = 'Não foi possível atualizar os rascunhos. Tente novamente.' }
   }
 
+  function upsertLocalDraft(draft) {
+    if (!draft?.id) return
+    const next = {
+      id: draft.id,
+      created_at: draft.created_at || state.lastSavedAt,
+      updated_at: draft.updated_at || state.lastSavedAt,
+      ...draft,
+    }
+    const idx = state.drafts.findIndex(item => String(item.id) === String(draft.id))
+    if (idx >= 0) {
+      state.drafts[idx] = { ...state.drafts[idx], ...next }
+    } else {
+      state.drafts = [next, ...state.drafts]
+    }
+  }
+
+  function removeLocalDraft(draftId) {
+    if (!draftId) return
+    state.drafts = state.drafts.filter(item => String(item.id) !== String(draftId))
+  }
+
   async function openContext(draftId) {
     state.ready = false
     state.error = ''
@@ -56,17 +77,27 @@ export function useFormFill(formId, userId, client = api) {
     state.completedId = null
     state.lastSavedAt = null
     try {
-      const form = (await client.getForm(formId))?.data?.form
-      if (!form?.is_active) throw new Error('Este formulário não está disponível para preenchimento.')
-      let version, saved = []
+      let form, version, saved = []
       if (draftId) {
-        const detail = (await client.getSubmission(draftId))?.data
+        const [formRes, detailRes] = await Promise.all([
+          client.getForm(formId),
+          client.getSubmission(draftId),
+        ])
+        form = formRes?.data?.form
+        if (!form?.is_active) throw new Error('Este formulário não está disponível para preenchimento.')
+        const detail = detailRes?.data
         if (!detail || detail.submission?.status !== 'draft' || String(detail.form?.id) !== String(formId) || String(detail.user?.id) !== String(userId)) throw new Error('Rascunho não encontrado para sua conta neste formulário.')
         version = detail.version
         saved = detail.values ?? []
         state.lastSavedAt = detail.submission?.updated_at || detail.submission?.created_at || null
       } else {
-        const versions = (await client.listFormVersions(formId))?.data?.versions ?? []
+        const [formRes, versionsRes] = await Promise.all([
+          client.getForm(formId),
+          client.listFormVersions(formId),
+        ])
+        form = formRes?.data?.form
+        if (!form?.is_active) throw new Error('Este formulário não está disponível para preenchimento.')
+        const versions = versionsRes?.data?.versions ?? []
         version = versions.filter(item => item.is_published).sort((a, b) => b.version_number - a.version_number)[0]
       }
       if (!version?.id) throw new Error('Este formulário ainda não tem uma versão publicada.')
@@ -90,7 +121,7 @@ export function useFormFill(formId, userId, client = api) {
   async function initialize(draftId = '') {
     if (busy.value) return
     state.loading = true
-    try { await openContext(draftId); await loadDrafts() }
+    try { await Promise.all([openContext(draftId), loadDrafts()]) }
     finally { state.loading = false }
   }
 
@@ -111,6 +142,7 @@ export function useFormFill(formId, userId, client = api) {
     if (!isAutosave) state.message = ''
     try {
       const payload = submissionValues(visibleFields.value, pruneHiddenValues(state.fields, values))
+      const previousDraftId = state.activeDraftId
       const response = finalize
         ? state.activeDraftId ? await client.finalizeDraft(formId, state.activeDraftId, payload) : await client.submitForm(formId, payload, state.version.id)
         : state.activeDraftId ? await client.updateDraft(formId, state.activeDraftId, payload) : await client.saveDraft(formId, payload, state.version.id)
@@ -121,12 +153,15 @@ export function useFormFill(formId, userId, client = api) {
         state.activeDraftId = null
         state.lastSavedAt = null
         state.message = 'Formulário enviado com sucesso.'
+        removeLocalDraft(previousDraftId)
+        await loadDrafts()
       } else {
-        state.activeDraftId = response.data.draft.id
-        state.lastSavedAt = new Date().toISOString()
+        const savedDraft = response?.data?.draft
+        state.activeDraftId = savedDraft?.id
+        state.lastSavedAt = savedDraft?.updated_at || savedDraft?.created_at || new Date().toISOString()
+        upsertLocalDraft(savedDraft)
         if (!isAutosave) state.message = 'Rascunho salvo com sucesso.'
       }
-      await loadDrafts()
       return true
     } catch (error) {
       fail(error)

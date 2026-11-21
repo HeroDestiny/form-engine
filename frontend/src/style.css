@@ -1462,6 +1462,17 @@ fieldset[aria-invalid='true'] {
   color: #ffffff;
 }
 
+.builder-sync-status {
+  min-height: 1.25rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.builder-sync-status.is-saving { color: var(--text); }
+.builder-sync-status.is-saved { color: var(--color-success); }
+.builder-sync-status.is-error { color: var(--color-danger); }
+
 .builder-toolbar {
   display: flex;
   align-items: center;

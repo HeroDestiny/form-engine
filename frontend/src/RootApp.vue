@@ -5,7 +5,7 @@ import { session } from './auth/session.js'
 
 <template>
   <AppLayout>
-    <RouterView v-if="$route.meta.public || session.user" :key="$route.fullPath" />
+    <RouterView v-if="$route.meta.public || session.user" :key="$route.path" />
     <section v-else class="panel" aria-busy="true">
       <span class="sr-only" role="status">Verificando sessão…</span>
       <div class="skeleton-list" aria-hidden="true">

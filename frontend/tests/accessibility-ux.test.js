@@ -430,6 +430,7 @@ test('reorderFieldPair and previewFieldFromDraft support keyboard reordering and
 
 test('useFormFill autosave skips blank new drafts, persists dirty answers quietly and avoids duplicate saves', async () => {
   const calls = []
+  let listDraftsCalls = 0
   const client = {
     getForm: async () => ({ data: { form: { id: 3, name: 'Cadastro', is_active: true } } }),
     listFormVersions: async () => ({ data: { versions: [{ id: 8, version_number: 1, is_published: true }] } }),
@@ -440,7 +441,10 @@ test('useFormFill autosave skips blank new drafts, persists dirty answers quietl
         ],
       },
     }),
-    listDrafts: async () => ({ data: { drafts: calls.length ? [{ id: 55 }] : [] } }),
+    listDrafts: async () => {
+      listDraftsCalls++
+      return { data: { drafts: calls.length ? [{ id: 55 }] : [] } }
+    },
     saveDraft: async (formId, payload, versionId) => {
       calls.push({ op: 'saveDraft', formId, payload, versionId })
       return { data: { draft: { id: 55 } } }
@@ -453,6 +457,7 @@ test('useFormFill autosave skips blank new drafts, persists dirty answers quietl
 
   const fill = useFormFill(3, 9, client)
   await fill.initialize()
+  assert.equal(listDraftsCalls, 1)
 
   // Blank new form should not create empty drafts via autosave
   assert.equal(await fill.autosave(), false)
@@ -463,6 +468,9 @@ test('useFormFill autosave skips blank new drafts, persists dirty answers quietl
   assert.equal(calls.length, 1)
   assert.equal(calls[0].op, 'saveDraft')
   assert.equal(fill.state.activeDraftId, 55)
+  assert.equal(fill.state.drafts.length, 1)
+  assert.equal(fill.state.drafts[0].id, 55)
+  assert.equal(listDraftsCalls, 1, 'autosave updates local drafts without refetching listDrafts')
   assert.ok(fill.state.lastSavedAt)
   assert.equal(fill.state.message, '')
 
@@ -475,6 +483,7 @@ test('useFormFill autosave skips blank new drafts, persists dirty answers quietl
   assert.equal(await fill.autosave(), true)
   assert.equal(calls.length, 2)
   assert.equal(calls[1].op, 'updateDraft')
+  assert.equal(listDraftsCalls, 1)
 })
 
 test('resolveBreadcrumbs and polite live announcer support contextual navigation and screen reader updates', async () => {

@@ -101,11 +101,24 @@ async function loadVersions(formId) {
   }
 }
 
-watch(() => filters.form_id, id => {
-  filters.version_id = ''
-  exportVersionIds.value = []
+watch(() => filters.form_id, (id, prevId) => {
+  if (id === prevId) return
+  if (applied.value.form_id !== id) {
+    filters.version_id = ''
+  }
+  exportVersionIds.value = filters.version_id ? [String(filters.version_id)] : []
   loadVersions(id)
 })
+
+watch(() => applied.value.version_id, (verId) => {
+  exportVersionIds.value = verId ? [String(verId)] : []
+})
+watch(
+  () => [applied.value.version_id, applied.value.user_id, applied.value.date_from, applied.value.date_to],
+  (vals) => {
+    if (vals.some(Boolean)) showAdvanced.value = true
+  },
+)
 
 onUnmounted(() => { versionRequest++ })
 
