@@ -136,6 +136,7 @@ class SubmissionService
                     },
                 ];
                 $rules['values.'.$field->name.'.name'] = ['sometimes', 'string', 'max:255'];
+
                 continue;
             }
 

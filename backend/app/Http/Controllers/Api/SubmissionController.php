@@ -12,6 +12,7 @@ use App\Http\Requests\UpdateDraftRequest;
 use App\Services\Forms\SubmissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -166,7 +167,7 @@ class SubmissionController extends Controller
             ], 422);
         }
 
-        /** @var \Illuminate\Http\UploadedFile $file */
+        /** @var UploadedFile $file */
         $file = $validated['file'];
         $originalName = $file->getClientOriginalName();
         $ext = strtolower($file->getClientOriginalExtension());
