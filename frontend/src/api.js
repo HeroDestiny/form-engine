@@ -183,6 +183,57 @@ export function finalizeDraft(formId, draftId, values) {
   })
 }
 
+export async function uploadFormAttachment(formId, file, fieldName, options = {}) {
+  const token = getAuthToken();
+  const headers = new Headers();
+  headers.set('Accept', 'application/json');
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('field_name', fieldName);
+
+  const response = await fetch(`${API_BASE}/forms/${formId}/attachments`, {
+    method: 'POST',
+    body: formData,
+    headers,
+    signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+  });
+
+  if (!response.ok) {
+    throw await responseError(response, token, true);
+  }
+
+  return response.json();
+}
+
+export function getSubmissionAttachmentUrl(submissionId, fieldId) {
+  return `${API_BASE}/submissions/${submissionId}/attachments/${fieldId}`;
+}
+
+export async function downloadSubmissionAttachment(submissionId, fieldId, filename = 'anexo') {
+  const token = getAuthToken();
+  const headers = new Headers();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(getSubmissionAttachmentUrl(submissionId, fieldId), {
+    headers,
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) {
+    throw await responseError(response, token, true);
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 // Admin tenants (admin-sistema)
 export function adminListTenants(params = {}, options = {}) {
   return apiRequest(queryPath(`/admin/tenants`, params, ['page', 'per_page']), options)

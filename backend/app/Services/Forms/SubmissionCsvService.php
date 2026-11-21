@@ -97,6 +97,12 @@ class SubmissionCsvService
             return implode('; ', array_map(fn ($choice) => SubmissionFieldValue::label($field, $choice), $choices));
         }
 
+        if ($field->type === 'file') {
+            $decoded = SubmissionFieldValue::decode($field, $value);
+
+            return is_array($decoded) ? ($decoded['name'] ?? '') : (string) ($value ?? '');
+        }
+
         if (in_array($field->type, ['select', 'radio'], true) && is_array($field->options)) {
             return SubmissionFieldValue::label($field, $value);
         }

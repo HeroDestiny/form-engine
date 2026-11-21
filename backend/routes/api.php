@@ -32,6 +32,7 @@ Route::middleware(['auth:sanctum', 'tenant.active'])->group(function (): void {
 
     Route::get('/submissions', [SubmissionController::class, 'index']);
     Route::get('/submissions/{submissionId}', [SubmissionController::class, 'show']);
+    Route::get('/submissions/{submissionId}/attachments/{fieldId}', [SubmissionController::class, 'downloadAttachment']);
     Route::post('/submissions/export', [SubmissionController::class, 'export'])->middleware('role:manager,admin');
 
     Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware('role:admin');
@@ -53,6 +54,7 @@ Route::middleware(['auth:sanctum', 'tenant.active'])->group(function (): void {
     Route::post('/forms/{formId}/versions/{versionId}/publish', [FormVersionController::class, 'publish'])->middleware('role:manager,admin');
 
     Route::get('/forms/{formId}/drafts', [SubmissionController::class, 'listDrafts']);
+    Route::post('/forms/{formId}/attachments', [SubmissionController::class, 'uploadAttachment']);
     Route::post('/forms/{formId}/submit', [SubmissionController::class, 'submit']);
     Route::post('/forms/{formId}/drafts', [SubmissionController::class, 'saveDraft']);
     Route::patch('/forms/{formId}/drafts/{submissionId}', [SubmissionController::class, 'updateDraft']);

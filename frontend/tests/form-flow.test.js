@@ -1,7 +1,30 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { useFormFill } from '../src/composables/useFormFill.js'
-import { fieldPayload, fieldValidationErrors, initialValues, nextFieldOrder, submissionValues } from '../src/utils/formValues.js'
+import { fieldPayload, fieldValidationErrors, formFillProgress, initialValues, isFieldFilled, nextFieldOrder, previewFieldFromDraft, submissionValues } from '../src/utils/formValues.js'
+import {
+  evaluateCondition,
+  filterVisibleFields,
+  getFieldChoices,
+  getFieldCondition,
+  isFieldVisible,
+  pruneHiddenValues,
+} from '../src/utils/conditionalLogic.js'
+import {
+  BLOCK_PRESETS,
+  FIELD_PRESETS,
+  duplicateFieldDraft,
+  generateUniqueFieldName,
+} from '../src/utils/formPresets.js'
+import {
+  extractUniqueSections,
+  getFieldSection,
+  getFieldSectionDescription,
+  getFieldWidth,
+  getFieldWidthClass,
+  getFormLayoutMode,
+  groupFieldsBySection,
+} from '../src/utils/formLayout.js'
 
 const fields = [{ id: 1, name: 'name', type: 'text', order: 10 }, { id: 2, name: 'amount', type: 'number', order: 20 }, { id: 3, name: 'choices', type: 'checkbox', order: 30 }]
 const detail = { submission: { id: 7, status: 'draft' }, form: { id: 1 }, user: { id: 2 }, version: { id: 10, version_number: 1 }, values: [{ name: 'name', value: 'Saved' }, { name: 'choices', value: ['a'] }] }
@@ -145,4 +168,263 @@ test('zero values, checkbox arrays and special but valid field names survive pay
   assert.equal(payload.__proto__, 'safe')
   assert.equal(Object.hasOwn(payload, 'choices'), false)
   assert.equal(fieldValidationErrors({ body: { errors: { 'values.__proto__': ['Invalid'] } } }).__proto__, 'Invalid')
+})
+
+test('file attachment fields support initial values, progress calculation, submission payload and optional extension filters', () => {
+  const fileField = { id: 99, name: 'comprovante', label: 'Comprovante', type: 'file', is_required: true, order: 1 }
+  const allFields = [fileField]
+
+  // Initial value is null
+  const initial = initialValues(allFields)
+  assert.equal(initial.comprovante, null)
+  assert.equal(isFieldFilled(initial.comprovante), false)
+
+  // Progress is 0%
+  const progBefore = formFillProgress(allFields, initial)
+  assert.equal(progBefore.requiredFilled, 0)
+  assert.equal(progBefore.percent, 0)
+
+  // Filled with attachment metadata
+  const attached = { comprovante: { path: 'tenants/1/attachments/2026/10/hash.pdf', name: 'recibo.pdf', size: 102400 } }
+  assert.equal(isFieldFilled(attached.comprovante), true)
+
+  const progAfter = formFillProgress(allFields, attached)
+  assert.equal(progAfter.requiredFilled, 1)
+  assert.equal(progAfter.percent, 100)
+
+  // Submission values includes attachment object
+  const payload = submissionValues(allFields, attached)
+  assert.deepEqual(payload.comprovante, attached.comprovante)
+
+  // Field payload with optionsText parses allowed extensions
+  const fieldWithExt = { ...fileField, optionsText: 'pdf|PDF\npng|PNG' }
+  const fieldPayloadRes = fieldPayload(fieldWithExt)
+  assert.deepEqual(fieldPayloadRes.options, [{ value: 'pdf', label: 'PDF' }, { value: 'png', label: 'PNG' }])
+})
+
+test('conditional logic engine evaluates equals, not_equals, in, filled, empty and circular safety', () => {
+  // Test operators
+  assert.equal(evaluateCondition({ field: 'tipo', operator: 'equals', value: 'fisica' }, { tipo: 'fisica' }), true)
+  assert.equal(evaluateCondition({ field: 'tipo', operator: 'equals', value: 'fisica' }, { tipo: 'juridica' }), false)
+  assert.equal(evaluateCondition({ field: 'tipo', operator: 'not_equals', value: 'fisica' }, { tipo: 'juridica' }), true)
+  assert.equal(evaluateCondition({ field: 'tipo', operator: 'not_equals', value: 'fisica' }, { tipo: 'fisica' }), false)
+
+  // 'in' operator with array value (e.g. checkbox)
+  assert.equal(evaluateCondition({ field: 'hobbies', operator: 'in', value: 'esporte' }, { hobbies: ['leitura', 'esporte'] }), true)
+  assert.equal(evaluateCondition({ field: 'hobbies', operator: 'in', value: 'cinema' }, { hobbies: ['leitura', 'esporte'] }), false)
+
+  // 'in' operator with comma-separated rule value against scalar field answer
+  assert.equal(evaluateCondition({ field: 'estado', operator: 'in', value: 'SP, RJ, MG' }, { estado: 'RJ' }), true)
+  assert.equal(evaluateCondition({ field: 'estado', operator: 'in', value: 'SP, RJ, MG' }, { estado: 'RS' }), false)
+
+  // 'filled' and 'empty' operators
+  assert.equal(evaluateCondition({ field: 'nome', operator: 'filled' }, { nome: 'Paulo' }), true)
+  assert.equal(evaluateCondition({ field: 'nome', operator: 'filled' }, { nome: '   ' }), false)
+  assert.equal(evaluateCondition({ field: 'nome', operator: 'filled' }, { nome: null }), false)
+  assert.equal(evaluateCondition({ field: 'nome', operator: 'empty' }, { nome: '' }), true)
+  assert.equal(evaluateCondition({ field: 'nome', operator: 'empty' }, { nome: 'Paulo' }), false)
+
+  // Field definitions
+  const testFields = [
+    { name: 'tipo_pessoa', type: 'radio' },
+    { name: 'cpf', type: 'text', condition: { field: 'tipo_pessoa', operator: 'equals', value: 'fisica' } },
+    { name: 'cnpj', type: 'text', condition: { field: 'tipo_pessoa', operator: 'equals', value: 'juridica' } },
+    { name: 'razao_social', type: 'text', condition: { field: 'cnpj', operator: 'filled' } },
+  ]
+
+  // Filter visible fields
+  const visibleFisica = filterVisibleFields(testFields, { tipo_pessoa: 'fisica', cpf: '123' })
+  assert.deepEqual(visibleFisica.map(f => f.name), ['tipo_pessoa', 'cpf'])
+
+  const visibleJuridica = filterVisibleFields(testFields, { tipo_pessoa: 'juridica', cnpj: '456' })
+  assert.deepEqual(visibleJuridica.map(f => f.name), ['tipo_pessoa', 'cnpj', 'razao_social'])
+
+  // Prune hidden values (fields, values)
+  const dirtyAnswers = { tipo_pessoa: 'fisica', cpf: '123', cnpj: 'orphan_cnpj', razao_social: 'orphan_razao' }
+  const cleanAnswers = pruneHiddenValues(testFields, dirtyAnswers)
+  assert.deepEqual({ ...cleanAnswers }, { tipo_pessoa: 'fisica', cpf: '123' })
+
+  // Circular dependency safety (A depends on B, B depends on A without infinite recursion)
+  const circularFields = [
+    { name: 'a', condition: { field: 'b', operator: 'equals', value: '1' } },
+    { name: 'b', condition: { field: 'a', operator: 'equals', value: '1' } },
+  ]
+  assert.equal(isFieldVisible(circularFields[0], { a: '0', b: '0' }, circularFields), false)
+})
+
+test('form presets and duplicateDraft generate collision-free names and valid payload structures', () => {
+  // Integrity of presets
+  assert.ok(FIELD_PRESETS.length >= 6)
+  for (const preset of FIELD_PRESETS) {
+    assert.ok(preset.id && preset.name && preset.label && preset.type)
+  }
+
+  assert.ok(BLOCK_PRESETS.length >= 3)
+  for (const block of BLOCK_PRESETS) {
+    assert.ok(block.id && block.name && block.fields.length > 0)
+    for (const f of block.fields) {
+      assert.ok(f.name && f.label && f.type)
+    }
+  }
+
+  // generateUniqueFieldName
+  const existing = [{ name: 'cpf' }, { name: 'cpf_2' }, { name: 'telefone' }]
+  assert.equal(generateUniqueFieldName('cpf', existing), 'cpf_3')
+  assert.equal(generateUniqueFieldName('novo_campo', existing), 'novo_campo')
+  assert.equal(generateUniqueFieldName('Endereço & Número!', existing), 'endereco_numero')
+
+  // duplicateFieldDraft
+  const original = {
+    id: 10,
+    label: 'Telefone Celular',
+    name: 'telefone',
+    type: 'text',
+    is_required: true,
+    order: 5,
+    options: null,
+    condition: { field: 'tipo', operator: 'equals', value: '1' },
+  }
+  const cloned = duplicateFieldDraft(original, existing)
+  assert.equal(cloned.label, 'Telefone Celular (Cópia)')
+  assert.equal(cloned.name, 'telefone_2')
+  assert.equal(cloned.type, 'text')
+  assert.equal(cloned.is_required, true)
+  assert.deepEqual(cloned.condition, original.condition)
+
+  // fieldPayload with condition
+  const payloadWithCond = fieldPayload({
+    label: 'Campo Condicional',
+    name: 'cond_field',
+    type: 'text',
+    is_required: true,
+    order: 6,
+    condition: { field: 'parent', operator: 'equals', value: 'yes' },
+  })
+  assert.deepEqual(payloadWithCond.condition, { field: 'parent', operator: 'equals', value: 'yes' })
+})
+
+test('useFormFill dynamic progress and pruneHiddenValues react to conditional fields', async () => {
+  const condFields = [
+    { id: 1, name: 'tipo', type: 'radio', is_required: true, order: 1 },
+    { id: 2, name: 'cpf', type: 'text', is_required: true, order: 2, options: { condition: { field: 'tipo', operator: 'equals', value: 'fisica' } } },
+    { id: 3, name: 'cnpj', type: 'text', is_required: true, order: 3, options: { condition: { field: 'tipo', operator: 'equals', value: 'juridica' } } },
+  ]
+  const requests = []
+  const form = useFormFill(1, 2, client({
+    listFields: async () => ({ data: { fields: condFields } }),
+    saveDraft: async (...args) => { requests.push(args); return { data: { draft: { id: 7 } } } },
+  }))
+  await form.initialize()
+
+  // Initially only 'tipo' is visible because 'tipo' has no value yet
+  assert.deepEqual(form.visibleFields.value.map(f => f.name), ['tipo'])
+  assert.equal(form.progress.value.requiredTotal, 1)
+  assert.equal(form.progress.value.percent, 0)
+
+  // Answering 'fisica' reveals 'cpf' and updates required count to 2
+  form.values.tipo = 'fisica'
+  assert.deepEqual(form.visibleFields.value.map(f => f.name), ['tipo', 'cpf'])
+  assert.equal(form.progress.value.requiredTotal, 2)
+  assert.equal(form.progress.value.requiredFilled, 1)
+  assert.equal(form.progress.value.percent, 50)
+
+  // Answering 'cpf' reaches 100%
+  form.values.cpf = '12345678900'
+  form.values.cnpj = 'orphan_value_should_be_pruned'
+  assert.equal(form.progress.value.percent, 100)
+
+  // Saving prunes the hidden cnpj value
+  await form.save()
+  assert.equal(requests.length, 1)
+  assert.deepEqual(requests[0][1], { tipo: 'fisica', cpf: '12345678900' })
+  assert.equal('cnpj' in requests[0][1], false)
+})
+
+test('form layout, logical cards and wizard stepper support section grouping and column widths', () => {
+  const sampleFields = [
+    { id: 1, name: 'nome', label: 'Nome Completo', type: 'text', options: { section: 'Identificação', section_description: 'Dados pessoais', width: 'full' } },
+    { id: 2, name: 'cpf', label: 'CPF', type: 'text', options: { section: 'Identificação', width: 'half' } },
+    { id: 3, name: 'rg', label: 'RG', type: 'text', options: { section: 'Identificação', width: 'half' } },
+    { id: 4, name: 'cep', label: 'CEP', type: 'text', options: { section: 'Endereço', width: 'third' } },
+    { id: 5, name: 'cidade', label: 'Cidade', type: 'text', options: { section: 'Endereço', width: 'half' } },
+    { id: 6, name: 'observacoes', label: 'Observações', type: 'textarea' }, // Unassigned section
+  ]
+
+  // getFieldSection and getFieldWidth
+  assert.equal(getFieldSection(sampleFields[0]), 'Identificação')
+  assert.equal(getFieldSection(sampleFields[5]), null)
+  assert.equal(getFieldSectionDescription(sampleFields[0]), 'Dados pessoais')
+  assert.equal(getFieldWidth(sampleFields[0]), 'full')
+  assert.equal(getFieldWidth(sampleFields[1]), 'half')
+  assert.equal(getFieldWidth(sampleFields[3]), 'third')
+  assert.equal(getFieldWidth(sampleFields[5]), 'full')
+
+  // getFieldWidthClass polymorphic support (strings, objects, options.width, json string, undefined)
+  assert.equal(getFieldWidthClass('full'), 'col-12')
+  assert.equal(getFieldWidthClass('half'), 'col-6')
+  assert.equal(getFieldWidthClass('third'), 'col-4')
+  assert.equal(getFieldWidthClass(sampleFields[0]), 'col-12')
+  assert.equal(getFieldWidthClass(sampleFields[1]), 'col-6')
+  assert.equal(getFieldWidthClass(sampleFields[3]), 'col-4')
+  assert.equal(getFieldWidthClass({ width: 'half' }), 'col-6')
+  assert.equal(getFieldWidthClass({ options: { width: 'third' } }), 'col-4')
+  assert.equal(getFieldWidthClass({ options: '{"width":"half"}' }), 'col-6')
+  assert.equal(getFieldWidthClass(undefined), 'col-12')
+  assert.equal(getFieldWidthClass(null), 'col-12')
+
+  const draftPreview = previewFieldFromDraft({
+    label: 'Email Corporativo',
+    name: 'email_corp',
+    type: 'email',
+    width: 'half',
+    section: 'Contato',
+  })
+  assert.equal(getFieldWidth(draftPreview), 'half')
+  assert.equal(getFieldWidthClass(draftPreview), 'col-6')
+  assert.equal(draftPreview.options.width, 'half')
+  assert.equal(draftPreview.options.section, 'Contato')
+
+  // extractUniqueSections
+  const sections = extractUniqueSections(sampleFields)
+  assert.deepEqual(sections, ['Endereço', 'Identificação'])
+
+  // groupFieldsBySection
+  const groups = groupFieldsBySection(sampleFields)
+  assert.equal(groups.length, 3)
+  assert.equal(groups[0].title, 'Identificação')
+  assert.equal(groups[0].description, 'Dados pessoais')
+  assert.equal(groups[0].fields.length, 3)
+  assert.equal(groups[1].title, 'Endereço')
+  assert.equal(groups[1].fields.length, 2)
+  assert.equal(groups[2].title, 'Campos Gerais')
+  assert.equal(groups[2].isDefault, true)
+  assert.equal(groups[2].fields.length, 1)
+
+  // getFormLayoutMode
+  assert.equal(getFormLayoutMode(sampleFields), 'cards')
+  const wizardFields = [{ ...sampleFields[0], options: { layout_mode: 'wizard' } }]
+  assert.equal(getFormLayoutMode(wizardFields), 'wizard')
+
+  // duplicateFieldDraft preserves layout & section
+  const duplicated = duplicateFieldDraft(sampleFields[0], sampleFields)
+  assert.equal(duplicated.section, 'Identificação')
+  assert.equal(duplicated.section_description, 'Dados pessoais')
+  assert.equal(duplicated.width, 'full')
+
+  // fieldPayload with layout attributes
+  const payload = fieldPayload({
+    label: 'Complemento',
+    name: 'complemento',
+    type: 'text',
+    is_required: false,
+    order: 10,
+    section: 'Endereço',
+    section_description: 'Dados residenciais',
+    width: 'third',
+    layout_mode: 'wizard',
+  })
+  assert.equal(payload.section, 'Endereço')
+  assert.equal(payload.section_description, 'Dados residenciais')
+  assert.equal(payload.width, 'third')
+  assert.equal(payload.layout_mode, 'wizard')
 })

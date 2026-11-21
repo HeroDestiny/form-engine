@@ -73,7 +73,12 @@ RUN mv "$PHP_INI_DIR/php.ini-development" "$PHP_INI_DIR/php.ini" && \
         echo 'opcache.max_accelerated_files=10000'; \
         echo 'opcache.validate_timestamps=1'; \
         echo 'expose_php=Off'; \
-    } > "$PHP_INI_DIR/conf.d/docker-php-config.ini"
+    } > "$PHP_INI_DIR/conf.d/docker-php-config.ini" && \
+    { \
+        echo '[www]'; \
+        echo 'pm = static'; \
+        echo 'pm.max_children = 4'; \
+    } > /usr/local/etc/php-fpm.d/zz-tuning.conf
 
 # Instalar Composer com versão específica e verificação SHA256
 COPY --from=composer /usr/bin/composer /usr/bin/composer

@@ -53,10 +53,12 @@ class RoutePermissionMatrixTest extends TestCase
             ['DELETE', '/forms/{form}/versions/{version}/fields/{field}', [], self::MANAGERS, 200],
             ['POST', '/forms/{form}/versions/{version}/publish', [], self::MANAGERS, 200],
             ['GET', '/forms/{form}/drafts', [], self::ALL, 200],
+            ['POST', '/forms/{form}/attachments', [], self::ALL, 422],
             ['POST', '/forms/{form}/submit', ['values' => []], self::ALL, 201],
             ['POST', '/forms/{form}/drafts', ['values' => []], self::ALL, 201],
             ['PATCH', '/forms/{form}/drafts/{draft}', ['values' => []], self::ALL, 200],
             ['POST', '/forms/{form}/drafts/{draft}/submit', ['values' => []], self::ALL, 200],
+            ['GET', '/submissions/{submission}/attachments/{field}', [], self::ALL, 404],
         ];
     }
 

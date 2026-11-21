@@ -1,17 +1,32 @@
 <script setup>
-import { onMounted, reactive } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useQueryListing } from '../composables/useQueryListing.js'
+import { initialsFromName } from '../composables/useTheme.js'
+import { pushToast } from '../composables/useToast.js'
 import ListContent from '../components/ListContent.vue'
 import ListPagination from '../components/ListPagination.vue'
+import StatusBadge from '../components/StatusBadge.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import AppIcon from '../components/AppIcon.vue'
 import { listTenantUsers, createTenantUser, updateTenantUserStatus } from '../api'
-
 import { session } from '../auth/session.js'
+
+const roleLabels = {
+  user: 'Usuário (preenchimento)',
+  manager: 'Gestor (formulários e CSV)',
+  admin: 'Administrador da unidade',
+  'admin-sistema': 'Administrador do sistema',
+}
+
+const createModalOpen = ref(false)
+const createFormRef = ref(null)
 
 const state = reactive({
   error: '',
-  message: '',
+  createError: '',
   saving: false,
   tenant: session.tenant,
+  confirmUser: null,
 })
 
 const form = reactive({
@@ -22,14 +37,24 @@ const form = reactive({
 })
 
 const { state: listing, perPage, load: loadContextAndUsers, setPage, setPerPage } = useQueryListing(
-  (params, options) => listTenantUsers(session.tenant.id, params, options), 'users',
+  (params, options) => listTenantUsers(session.tenant.id, params, options),
+  'users',
 )
+
+function openCreateModal() {
+  state.createError = ''
+  createModalOpen.value = true
+}
+
+function submitCreateModal() {
+  if (createFormRef.value && !createFormRef.value.reportValidity()) return
+  void handleCreateUser()
+}
 
 async function handleCreateUser() {
   if (!state.tenant) return
   state.saving = true
-  state.error = ''
-  state.message = ''
+  state.createError = ''
 
   try {
     await createTenantUser(state.tenant.id, {
@@ -43,32 +68,36 @@ async function handleCreateUser() {
     form.email = ''
     form.password = ''
     form.role = 'user'
+    createModalOpen.value = false
 
-    state.message = 'Usuário criado com sucesso.'
+    pushToast('Usuário criado com sucesso.')
     await loadContextAndUsers()
     if (listing.pagination) await setPage(listing.pagination.last_page)
   } catch (error) {
     if (error.status === 422 && error.body?.errors) {
       const errors = error.body.errors
-      state.error = Object.values(errors)[0]?.[0] || 'Dados inválidos.'
+      state.createError = Object.values(errors)[0]?.[0] || 'Dados inválidos.'
     } else {
-      state.error = error?.body?.message || 'Erro ao criar usuário.'
+      state.createError = error?.body?.message || 'Erro ao criar usuário.'
     }
   } finally {
     state.saving = false
   }
 }
 
-async function toggleUserStatus(user) {
-  if (!window.confirm(`${user.is_active ? 'Desativar' : 'Ativar'} o usuário ${user.name}? Seus dados e submissões serão preservados.`)) return
-  if (!state.tenant) return
+async function confirmToggleUserStatus() {
+  const user = state.confirmUser
+  if (!user || !state.tenant) return
   state.error = ''
-  state.message = ''
   state.saving = true
   try {
-    await updateTenantUserStatus(state.tenant.id, user.id, !user.is_active)
+    const nextActive = !user.is_active
+    await updateTenantUserStatus(state.tenant.id, user.id, nextActive)
+    state.confirmUser = null
+    pushToast(`Conta de “${user.name}” ${nextActive ? 'ativada' : 'desativada'} com sucesso.`)
     await loadContextAndUsers()
   } catch (error) {
+    state.confirmUser = null
     state.error = error?.body?.message || 'Erro ao alterar status do usuário.'
   } finally {
     state.saving = false
@@ -81,67 +110,184 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="panel panel-forms">
-    <h1>Usuários</h1>
-    <p class="panel-subtitle">Administração de usuários do tenant atual.</p>
-
-    <p v-if="state.message" class="feedback" role="status">{{ state.message }}</p>
-    <p v-if="state.error" class="feedback error" role="alert">{{ state.error }}</p>
-
-    <div class="forms-grid">
-      <div class="form-card">
-        <h3>Lista</h3>
-        <ListContent :loading="listing.loading" :error="listing.error" :empty="!listing.items.length" empty-message="Nenhum usuário cadastrado." @retry="loadContextAndUsers">
-          <ul class="fields-list">
-            <li v-for="u in listing.items" :key="u.id" class="field-row">
-              <div class="field-row-main">
-                <strong>{{ u.name }}</strong>
-                <span class="field-row-meta">
-                  {{ u.email }} · {{ u.role }} · {{ u.is_active ? 'ativo' : 'inativo' }}
-                </span>
-              </div>
-              <button class="ghost-button" type="button" :disabled="state.saving || listing.loading || String(u.id) === String(session.user.id)" @click="toggleUserStatus(u)">
-                {{ u.is_active ? 'Desativar' : 'Ativar' }}
-              </button>
-            </li>
-          </ul>
-        </ListContent>
-        <ListPagination :pagination="listing.pagination" :loading="listing.loading" :per-page="perPage" @page="setPage" @per-page="setPerPage" />
+  <div class="page-stack">
+    <div class="page-header">
+      <div>
+        <h1>Usuários da Unidade</h1>
+        <p class="panel-subtitle">
+          Gerencie credenciais e perfis de acesso vinculados à unidade <strong>{{ state.tenant?.name || 'atual' }}</strong>.
+        </p>
       </div>
-
-      <div class="form-card">
-        <h3>Novo usuário</h3>
-        <form class="form" @submit.prevent="handleCreateUser">
-          <label class="field">
-            <span>Nome</span>
-            <input v-model="form.name" type="text" required minlength="3" maxlength="255" />
-          </label>
-
-          <label class="field">
-            <span>E-mail</span>
-            <input v-model="form.email" type="email" required />
-          </label>
-
-          <label class="field">
-            <span>Senha</span>
-            <input v-model="form.password" type="password" required minlength="8" />
-          </label>
-
-          <label class="field">
-            <span>Papel</span>
-            <select v-model="form.role">
-              <option value="user">user</option>
-              <option value="manager">manager</option>
-              <option value="admin">admin</option>
-            </select>
-          </label>
-
-          <button class="primary-button" type="submit" :disabled="state.saving || listing.loading">
-            <span v-if="!state.saving">Criar usuário</span>
-            <span v-else>Salvando…</span>
-          </button>
-        </form>
+      <div class="panel-actions">
+        <button class="ghost-button" type="button" :disabled="listing.loading" @click="loadContextAndUsers">
+          <AppIcon name="refresh" :size="16" />
+          <span>Atualizar</span>
+        </button>
+        <button class="primary-button" type="button" @click="openCreateModal">
+          <AppIcon name="plus" :size="16" />
+          <span>Novo usuário</span>
+        </button>
       </div>
     </div>
-  </section>
+
+    <p v-if="state.error" class="feedback error" role="alert">{{ state.error }}</p>
+
+    <div class="table-card">
+      <ListContent
+        :loading="listing.loading"
+        :error="listing.error"
+        :empty="!listing.items.length"
+        empty-message="Nenhum usuário cadastrado nesta unidade."
+        @retry="loadContextAndUsers"
+      >
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Usuário</th>
+                <th scope="col">Perfil de Acesso</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="col-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="u in listing.items" :key="u.id">
+                <td data-label="Usuário">
+                  <div class="cell-user">
+                    <span class="avatar-badge" aria-hidden="true">{{ initialsFromName(u.name) }}</span>
+                    <div class="cell-stack">
+                      <div>
+                        <strong>{{ u.name }}</strong>
+                        <span v-if="String(u.id) === String(session.user.id)" class="field-hint"> (sua conta)</span>
+                      </div>
+                      <small>{{ u.email }} · ID #{{ u.id }}</small>
+                    </div>
+                  </div>
+                </td>
+                <td data-label="Perfil de Acesso">
+                  {{ roleLabels[u.role] || u.role }}
+                </td>
+                <td data-label="Status">
+                  <StatusBadge
+                    :tone="u.is_active ? 'success' : 'muted'"
+                    :label="u.is_active ? 'Ativo' : 'Inativo'"
+                  />
+                </td>
+                <td data-label="Ações" class="col-right">
+                  <button
+                    class="ghost-button"
+                    :class="{ 'ghost-danger': u.is_active && String(u.id) !== String(session.user.id) }"
+                    type="button"
+                    :disabled="state.saving || listing.loading || String(u.id) === String(session.user.id)"
+                    :aria-label="`${u.is_active ? 'Desativar' : 'Ativar'} usuário ${u.name}`"
+                    @click="state.confirmUser = u"
+                  >
+                    {{ u.is_active ? 'Desativar' : 'Ativar' }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ListContent>
+
+      <ListPagination
+        select-id="users-per-page"
+        :pagination="listing.pagination"
+        :loading="listing.loading"
+        :per-page="perPage"
+        @page="setPage"
+        @per-page="setPerPage"
+      />
+    </div>
+
+    <!-- Modal de Criação de Usuário -->
+    <ConfirmDialog
+      :open="createModalOpen"
+      dialog-id="create-user-modal"
+      title="Cadastrar novo usuário"
+      :description="`A conta será criada na unidade ${state.tenant?.name || 'atual'}.`"
+      :confirm-label="state.saving ? 'Salvando…' : 'Criar usuário'"
+      :busy="state.saving"
+      @confirm="submitCreateModal"
+      @cancel="createModalOpen = false"
+    >
+      <form ref="createFormRef" class="form" style="margin-top: 0.75rem;" @submit.prevent="handleCreateUser">
+        <div class="field">
+          <label for="user-name">
+            <span>Nome completo</span>
+            <span class="required-indicator" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="user-name"
+            v-model="form.name"
+            type="text"
+            required
+            minlength="3"
+            maxlength="255"
+            placeholder="Ex.: Maria Oliveira"
+          />
+        </div>
+
+        <div class="field">
+          <label for="user-email">
+            <span>E-mail institucional</span>
+            <span class="required-indicator" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="user-email"
+            v-model="form.email"
+            type="email"
+            required
+            placeholder="maria.oliveira@organizacao.gov.br"
+          />
+        </div>
+
+        <div class="field">
+          <label for="user-password">
+            <span>Senha inicial</span>
+            <span class="required-indicator" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="user-password"
+            v-model="form.password"
+            type="password"
+            required
+            minlength="8"
+            autocomplete="new-password"
+            aria-describedby="user-password-hint"
+          />
+          <small id="user-password-hint" class="field-hint">Mínimo de 8 caracteres.</small>
+        </div>
+
+        <div class="field">
+          <label for="user-role">Perfil de acesso</label>
+          <select id="user-role" v-model="form.role">
+            <option value="user">Usuário — Preenchimento e próprios envios</option>
+            <option value="manager">Gestor — Criação de formulários e exportação CSV</option>
+            <option value="admin">Administrador — Gestão de usuários e auditoria</option>
+          </select>
+        </div>
+
+        <p v-if="state.createError" class="feedback error" role="alert" style="margin-bottom: 0;">
+          {{ state.createError }}
+        </p>
+      </form>
+    </ConfirmDialog>
+
+    <!-- Modal de Confirmação de Ativação/Desativação -->
+    <ConfirmDialog
+      :open="!!state.confirmUser"
+      dialog-id="toggle-user-confirm"
+      :title="state.confirmUser?.is_active ? `Desativar a conta de “${state.confirmUser.name}”?` : `Ativar a conta de “${state.confirmUser?.name || ''}”?`"
+      :description="state.confirmUser?.is_active
+        ? 'O usuário não poderá realizar novos logins. Seus dados históricos, auditoria e submissões permanecem preservados.'
+        : 'O usuário voltará a poder autenticar-se nesta unidade administrativa.'"
+      :confirm-label="state.saving ? 'Atualizando…' : (state.confirmUser?.is_active ? 'Desativar usuário' : 'Ativar usuário')"
+      :tone="state.confirmUser?.is_active ? 'danger' : 'primary'"
+      :busy="state.saving"
+      @confirm="confirmToggleUserStatus"
+      @cancel="state.confirmUser = null"
+    />
+  </div>
 </template>
